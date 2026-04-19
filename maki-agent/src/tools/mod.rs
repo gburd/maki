@@ -12,6 +12,15 @@ mod edit;
 mod file_tracker;
 mod fuzzy_replace;
 mod grep;
+mod lsp_diagnostics;
+mod lsp_document_symbol;
+mod lsp_goto;
+mod lsp_hover;
+mod lsp_implementation;
+mod lsp_incoming_calls;
+mod lsp_outgoing_calls;
+mod lsp_references;
+mod lsp_workspace_symbol;
 mod multiedit;
 mod read;
 pub mod registry;
@@ -127,6 +136,15 @@ pub const TASK_TOOL_NAME: &str = task::Task::NAME;
 pub const TODOWRITE_TOOL_NAME: &str = todowrite::TodoWrite::NAME;
 pub const WRITE_TOOL_NAME: &str = write::Write::NAME;
 pub const CODE_EXECUTION_TOOL_NAME: &str = code_execution::CodeExecution::NAME;
+pub const LSP_GOTO_DEFINITION_TOOL_NAME: &str = lsp_goto::LspGotoDefinition::NAME;
+pub const LSP_REFERENCES_TOOL_NAME: &str = lsp_references::LspReferences::NAME;
+pub const LSP_HOVER_TOOL_NAME: &str = lsp_hover::LspHover::NAME;
+pub const LSP_DIAGNOSTICS_TOOL_NAME: &str = lsp_diagnostics::LspDiagnostics::NAME;
+pub const LSP_IMPLEMENTATION_TOOL_NAME: &str = lsp_implementation::LspImplementation::NAME;
+pub const LSP_DOCUMENT_SYMBOL_TOOL_NAME: &str = lsp_document_symbol::LspDocumentSymbol::NAME;
+pub const LSP_WORKSPACE_SYMBOL_TOOL_NAME: &str = lsp_workspace_symbol::LspWorkspaceSymbol::NAME;
+pub const LSP_INCOMING_CALLS_TOOL_NAME: &str = lsp_incoming_calls::LspIncomingCalls::NAME;
+pub const LSP_OUTGOING_CALLS_TOOL_NAME: &str = lsp_outgoing_calls::LspOutgoingCalls::NAME;
 
 pub(crate) const PLAN_WRITE_RESTRICTED: &str = "write restricted to plan file in plan mode";
 pub(crate) const DEADLINE_EXCEEDED: &str = "timeout exceeded";
@@ -195,6 +213,7 @@ pub struct ToolContext {
     pub permissions: Arc<PermissionManager>,
     pub timeouts: maki_providers::Timeouts,
     pub file_tracker: Arc<FileReadTracker>,
+    pub lsp_handle: Option<maki_lsp::LspHandle>,
     pub prompt_slots: Arc<crate::prompt::ResolvedSlots>,
 }
 
@@ -545,6 +564,15 @@ register_tools! {
     task::Task,
     batch::Batch,
     code_execution::CodeExecution,
+    lsp_goto::LspGotoDefinition,
+    lsp_references::LspReferences,
+    lsp_hover::LspHover,
+    lsp_diagnostics::LspDiagnostics,
+    lsp_implementation::LspImplementation,
+    lsp_document_symbol::LspDocumentSymbol,
+    lsp_workspace_symbol::LspWorkspaceSymbol,
+    lsp_incoming_calls::LspIncomingCalls,
+    lsp_outgoing_calls::LspOutgoingCalls,
 }
 
 pub fn is_builtin_tool(name: &str) -> bool {
@@ -610,6 +638,7 @@ pub(crate) fn interpreter_ctx(
         timeouts: maki_providers::Timeouts::default(),
         file_tracker,
         prompt_slots: Arc::new(crate::prompt::ResolvedSlots::default()),
+        lsp_handle: None,
     }
 }
 

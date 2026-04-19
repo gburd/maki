@@ -79,6 +79,7 @@ pub struct Agent {
     timeouts: maki_providers::Timeouts,
     file_tracker: Arc<FileReadTracker>,
     prompt_slots: Arc<crate::prompt::ResolvedSlots>,
+    lsp_handle: Option<maki_lsp::LspHandle>,
 }
 
 impl Agent {
@@ -110,11 +111,17 @@ impl Agent {
             session_id: params.session_id,
             file_tracker: params.file_tracker,
             prompt_slots: params.prompt_slots,
+            lsp_handle: None,
         }
     }
 
     pub fn with_mcp(mut self, mcp: Option<McpHandle>) -> Self {
         self.mcp = mcp;
+        self
+    }
+
+    pub fn with_lsp(mut self, lsp: Option<maki_lsp::LspHandle>) -> Self {
+        self.lsp_handle = lsp;
         self
     }
 
@@ -340,6 +347,7 @@ impl Agent {
             timeouts: self.timeouts,
             file_tracker: Arc::clone(&self.file_tracker),
             prompt_slots: Arc::clone(&self.prompt_slots),
+            lsp_handle: self.lsp_handle.clone(),
         }
     }
 
