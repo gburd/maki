@@ -9,6 +9,7 @@ use tracing::{debug, warn};
 use crate::model::{Model, ModelFamily, models_for_provider};
 use crate::providers::Timeouts;
 use crate::providers::anthropic::Anthropic;
+use crate::providers::bedrock::Bedrock;
 use crate::providers::copilot::Copilot;
 use crate::providers::dynamic;
 use crate::providers::google::Google;
@@ -23,6 +24,7 @@ use crate::{AgentError, Message, ProviderEvent, StreamResponse, ThinkingConfig};
 #[strum(serialize_all = "kebab-case")]
 pub enum ProviderKind {
     Anthropic,
+    Bedrock,
     #[strum(serialize = "openai")]
     OpenAi,
     Google,
@@ -38,6 +40,7 @@ impl ProviderKind {
     pub const fn display_name(self) -> &'static str {
         match self {
             Self::Anthropic => "Anthropic",
+            Self::Bedrock => "Bedrock",
             Self::OpenAi => "OpenAI",
             Self::Google => "Google",
             Self::Copilot => "Copilot",
@@ -52,6 +55,7 @@ impl ProviderKind {
     pub const fn api_key_env(self) -> &'static str {
         match self {
             Self::Anthropic => "ANTHROPIC_API_KEY",
+            Self::Bedrock => "AWS_BEARER_TOKEN_BEDROCK",
             Self::OpenAi => "OPENAI_API_KEY",
             Self::Google => "GEMINI_API_KEY",
             Self::Copilot => "GH_COPILOT_TOKEN",
@@ -65,6 +69,7 @@ impl ProviderKind {
     pub const fn base_url(self) -> &'static str {
         match self {
             Self::Anthropic => "https://api.anthropic.com/v1/messages",
+            Self::Bedrock => "https://bedrock-runtime.us-east-1.amazonaws.com",
             Self::OpenAi => "https://api.openai.com/v1",
             Self::Google => "https://generativelanguage.googleapis.com/v1beta",
             Self::Copilot => {
@@ -81,7 +86,7 @@ impl ProviderKind {
     pub const fn supports_thinking(self) -> bool {
         matches!(
             self,
-            Self::Anthropic | Self::Google | Self::Mistral | Self::Synthetic
+            Self::Anthropic | Self::Bedrock | Self::Google | Self::Mistral | Self::Synthetic
         )
     }
 
@@ -89,6 +94,9 @@ impl ProviderKind {
         match self {
             Self::Anthropic => {
                 Some("Prompt caching, thinking mode (adaptive/budgeted), advanced tool use")
+            }
+            Self::Bedrock => {
+                Some("AWS SigV4 auth, EventStream streaming, supports IAM/SSO/instance credentials")
             }
             Self::Google => Some("Native Gemini API with thinking support"),
             Self::Copilot => Some("Native Copilot Chat HTTP API with model endpoint discovery"),
@@ -105,6 +113,7 @@ impl ProviderKind {
     pub const fn family(self) -> ModelFamily {
         match self {
             Self::Anthropic => ModelFamily::Claude,
+            Self::Bedrock => ModelFamily::Claude,
             Self::OpenAi => ModelFamily::Gpt,
             Self::Google => ModelFamily::Gemini,
             Self::Copilot => ModelFamily::Generic,
@@ -121,7 +130,7 @@ impl ProviderKind {
 
     pub const fn fallback_max_output(self) -> u32 {
         match self {
-            Self::Anthropic => 128_000,
+            Self::Anthropic | Self::Bedrock => 128_000,
             Self::OpenAi => 100_000,
             Self::Google => 65_536,
             Self::Copilot => 100_000,
@@ -134,7 +143,7 @@ impl ProviderKind {
 
     pub const fn fallback_context_window(self) -> u32 {
         match self {
-            Self::Anthropic => 200_000,
+            Self::Anthropic | Self::Bedrock => 200_000,
             Self::OpenAi => 200_000,
             Self::Google => 1_000_000,
             Self::Copilot => 200_000,
@@ -148,6 +157,7 @@ impl ProviderKind {
     pub fn create(self, timeouts: Timeouts) -> Result<Box<dyn Provider>, AgentError> {
         match self {
             Self::Anthropic => Ok(Box::new(Anthropic::new(timeouts)?)),
+            Self::Bedrock => Ok(Box::new(Bedrock::new(timeouts)?)),
             Self::OpenAi => Ok(Box::new(OpenAi::new(timeouts)?)),
             Self::Google => Ok(Box::new(Google::new(timeouts)?)),
             Self::Copilot => Ok(Box::new(Copilot::new(timeouts)?)),
