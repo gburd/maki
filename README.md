@@ -73,4 +73,61 @@ Or download a pre-built binary from [GitHub Releases](https://github.com/tontint
 
 More info at the [official docs](http://maki.sh/docs).
 
+---
+
+## Fork changes (gburd/maki)
+
+This fork tracks [tontinton/maki](https://github.com/tontinton/maki) upstream and adds the following features:
+
+### Additional providers
+
+* **AWS Bedrock** — native provider using AWS SigV4 signing. Set `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (or use instance profiles). Supports all Bedrock-hosted Claude models.
+
+### LSP integration
+
+* 9 LSP tool operations (`goto_definition`, `find_references`, `hover`, `diagnostics`, etc.) via the `maki-lsp` crate, giving the agent IDE-level code intelligence.
+
+### No phone-home
+
+* The upstream version check on startup (`api.github.com/repos/.../releases/latest`) is now **opt-in**. Set `ui.check_for_updates = true` in config to re-enable it. Default is `false`.
+
+### Sandbox mode
+
+* `/sandbox` command toggles filesystem and network isolation for bash tool execution:
+  * **Linux** — [Bubblewrap](https://github.com/containers/bubblewrap): read-only root bind, writable cwd + `/tmp`, no network.
+  * **macOS** — Seatbelt (`sandbox-exec`): deny network and file-write except cwd + `/tmp`.
+
+### Vi/Emacs keybindings
+
+* `ui.keybindings` config option: `"default"`, `"emacs"`, or `"vi"`.
+* Vi mode: Normal/Insert with mode indicator, operator-pending `d`/`y`, motions (`h/j/k/l`, `w/b/e`, `0/$`), actions (`i/a/A/I/o/O`, `x`, `dd/dw/d$`, `yy/yw/y$`, `p`).
+
+### Static binary builds
+
+* `[profile.release]` with LTO, single codegen unit, strip, `panic = "abort"`.
+* Fully static Linux binaries via musl:
+  ```sh
+  rustup target add x86_64-unknown-linux-musl
+  just static
+  ```
+* The Nix flake devShell includes `musl` for this purpose.
+
+### Git state
+
+```
+upstream/main (007ba04) — Copilot provider, C++ indexer fix, lua async I/O
+  └── 7e7c18a  feat: add native AWS Bedrock provider
+  └── 6cb15c1  docs: regenerate providers page with Bedrock
+  └── 0b51044  feat: add LSP integration with 9 tool operations
+  └── 98a6496  docs: add LSP tools section
+  └── d067f5c  refactor: rewrite Bedrock to use AWS crates
+  └── ab2ce5b  fix: Bedrock model switching and endpoint URL encoding
+  └── 6beffcf  feat: make update check opt-in (no-phone-home)
+  └── 629b6a3  feat: add /sandbox toggle (sandbox)
+  └── ba00a5d  feat: add vi/emacs keybindings (editor-keybindings)
+  └── bfbefbd  release: bump to v0.2.9, static build support  ← v0.2.9 tag
+```
+
+---
+
 > DISCLAIMER: >90% of code in maki was written by maki, guided by humans. The code is not as good as what I would've made in the artisinal hand-made style. But it's also not slop / vibe coded. I just think people should be honest about their use of AI in projects in this era.

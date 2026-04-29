@@ -82,6 +82,7 @@
               clippy
               git
               just
+              musl
               openssl
               perl
               pkg-config
