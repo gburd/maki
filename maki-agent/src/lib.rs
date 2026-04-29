@@ -19,6 +19,7 @@ pub mod command;
 pub mod diff;
 pub mod permissions;
 pub(crate) mod prompt;
+pub mod sandbox;
 pub mod template;
 pub mod tools;
 pub use tools::ToolFilter;
