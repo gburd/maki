@@ -174,7 +174,8 @@ impl App {
                     streaming
                         .then(|| self.chats[self.active_chat].todo_panel.hint_line())
                         .flatten()
-                });
+                })
+                .or_else(|| self.input_box.vi_mode_hint());
             self.input_box.view(
                 frame,
                 layout.input_area,

@@ -204,6 +204,7 @@ pub struct UiFileConfig {
     pub typewriter_ms_per_char: Option<u64>,
     pub mouse_scroll_lines: Option<u32>,
     pub tool_output_lines: Option<ToolOutputLinesFile>,
+    pub keybindings: Option<String>,
 }
 
 impl UiFileConfig {
@@ -215,7 +216,8 @@ impl UiFileConfig {
             scrollbar,
             flash_duration_ms,
             typewriter_ms_per_char,
-            mouse_scroll_lines
+            mouse_scroll_lines,
+            keybindings
         );
         match (self.tool_output_lines.as_mut(), overlay.tool_output_lines) {
             (Some(base), Some(over)) => base.merge(over),
@@ -416,6 +418,24 @@ pub struct Config {
     pub plugins: PluginsConfig,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KeybindingMode {
+    #[default]
+    Default,
+    Emacs,
+    Vi,
+}
+
+impl KeybindingMode {
+    pub fn from_config_str(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "vi" | "vim" => Self::Vi,
+            "emacs" => Self::Emacs,
+            _ => Self::Default,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, ConfigSection)]
 #[config(section = "ui")]
 pub struct UiConfig {
@@ -436,6 +456,9 @@ pub struct UiConfig {
 
     #[config(skip, default = "ToolOutputLines::default()")]
     pub tool_output_lines: ToolOutputLines,
+
+    #[config(skip, default = "KeybindingMode::Default")]
+    pub keybindings: KeybindingMode,
 }
 
 impl UiConfig {
@@ -453,6 +476,11 @@ impl UiConfig {
                 .unwrap_or(DEFAULT_TYPEWRITER_MS_PER_CHAR),
             mouse_scroll_lines: f.mouse_scroll_lines.unwrap_or(DEFAULT_MOUSE_SCROLL_LINES),
             tool_output_lines: ToolOutputLines::from_file(f.tool_output_lines),
+            keybindings: f
+                .keybindings
+                .as_deref()
+                .map(KeybindingMode::from_config_str)
+                .unwrap_or_default(),
         }
     }
 
