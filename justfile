@@ -34,5 +34,12 @@ gen-docs:
 gen-docs-check:
     cargo run -p maki-docgen -- --check
 
+release:
+    cargo build --release --all-features
+
+# Build a fully static binary (Linux only, requires musl toolchain)
+static:
+    cargo build --release --all-features --target x86_64-unknown-linux-musl
+
 # Full CI check
 ci: fmt-check lint pylint test gen-docs-check

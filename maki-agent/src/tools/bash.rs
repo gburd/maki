@@ -197,11 +197,6 @@ impl Bash {
         std_cmd.env("GIT_TERMINAL_PROMPT", "0");
 
         // detach from tty so commands that try to read /dev/tty fail instead of hanging
-        let effective_cwd = workdir
-            .as_ref()
-            .map(|d| std::path::PathBuf::from(d.as_str()))
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-
 #[cfg(unix)]
         unsafe {
             std_cmd.pre_exec(|| {
