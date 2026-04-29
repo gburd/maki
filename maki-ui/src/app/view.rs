@@ -137,7 +137,8 @@ impl App {
             let panel_hint = in_plan
                 .then(|| self.plan_form.hint_line())
                 .flatten()
-                .or_else(|| streaming.then(|| self.todo_panel.hint_line()).flatten());
+                .or_else(|| streaming.then(|| self.todo_panel.hint_line()).flatten())
+                .or_else(|| self.input_box.vi_mode_hint());
             self.input_box.view(
                 frame,
                 layout.input_area,
