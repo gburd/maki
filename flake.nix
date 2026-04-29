@@ -3,10 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+    }:
     let
       lib = nixpkgs.lib;
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
@@ -18,7 +26,15 @@
         "x86_64-darwin"
         "aarch64-darwin"
       ];
-      forEachSystem = f: lib.genAttrs systems (system: f system (import nixpkgs { inherit system; }));
+      forEachSystem =
+        f:
+        lib.genAttrs systems (
+          system:
+          f system (import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          })
+        );
     in
     {
       packages = forEachSystem (
@@ -73,30 +89,53 @@
         _: pkgs:
         let
           certs = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+            targets = lib.optionals pkgs.stdenv.isLinux [
+              "x86_64-unknown-linux-musl"
+              "aarch64-unknown-linux-musl"
+            ];
+          };
+          # Full GCC cross-compiler targeting musl. Provides musl-compatible
+          # gcc, g++, and libstdc++.a (unlike musl-gcc which only wraps the
+          # host GCC and links against glibc's libstdc++).
+          muslCross = pkgs.pkgsCross.musl64.stdenv.cc;
+          muslCC = "${muslCross}/bin/x86_64-unknown-linux-musl-gcc";
+          muslCXX = "${muslCross}/bin/x86_64-unknown-linux-musl-g++";
         in
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              cargo
-              cargo-nextest
-              clippy
-              git
-              just
-              musl
-              openssl
-              perl
-              pkg-config
-              python3
-              ripgrep
-              ruff
-              rustc
-              rustfmt
-              stylua
-              ty
-            ];
+            packages =
+              [ rustToolchain ]
+              ++ (with pkgs; [
+                cargo-nextest
+                git
+                just
+                lld # Rust 1.85+ defaults to lld on x86_64-linux-gnu
+                openssl
+                perl
+                pkg-config
+                python3
+                ripgrep
+                ruff
+                stylua
+                ty
+              ]);
 
             SSL_CERT_FILE = certs;
             NIX_SSL_CERT_FILE = certs;
+
+            # Musl static build configuration (Linux only).
+            # Uses the musl cross-compiler so ALL C/C++ code (tree-sitter
+            # grammars, Luau, curl, openssl) is compiled against musl with
+            # a musl-compatible libstdc++.
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER =
+              lib.optionalString pkgs.stdenv.isLinux muslCC;
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS =
+              lib.optionalString pkgs.stdenv.isLinux "-C target-feature=+crt-static";
+            CC_x86_64_unknown_linux_musl =
+              lib.optionalString pkgs.stdenv.isLinux muslCC;
+            CXX_x86_64_unknown_linux_musl =
+              lib.optionalString pkgs.stdenv.isLinux muslCXX;
           };
         }
       );
