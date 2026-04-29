@@ -111,8 +111,20 @@ pub(crate) fn models() -> &'static [ModelEntry] {
     ]
 }
 
+/// Resolves the optional cross-region inference profile prefix.
+/// Set `AWS_BEDROCK_CROSS_REGION` to a region prefix (e.g., `us`, `eu`) to
+/// use cross-region inference profiles (e.g., `us.anthropic.claude-opus-4-7-v1:0`).
+fn cross_region_prefix() -> Option<String> {
+    env::var("AWS_BEDROCK_CROSS_REGION")
+        .ok()
+        .filter(|s| !s.is_empty())
+}
+
 /// Maps maki model IDs to Bedrock model identifiers.
+/// If `AWS_BEDROCK_CROSS_REGION` is set, prepends the region prefix
+/// (e.g., `us.anthropic.claude-opus-4-7-v1:0`).
 fn bedrock_model_id(model_id: &str) -> String {
+    // Passthrough fully-qualified IDs (contain '.' or ':')
     if model_id.contains('.') || model_id.contains(':') {
         return model_id.to_string();
     }
@@ -123,9 +135,19 @@ fn bedrock_model_id(model_id: &str) -> String {
         "claude-sonnet-4-6" => ("anthropic.claude-sonnet-4-6", "v1:0"),
         "claude-opus-4-6" => ("anthropic.claude-opus-4-6", "v1:0"),
         "claude-opus-4-7" => ("anthropic.claude-opus-4-7", "v1:0"),
-        _ => return format!("anthropic.{model_id}"),
+        _ => {
+            let base = format!("anthropic.{model_id}");
+            return match cross_region_prefix() {
+                Some(prefix) => format!("{prefix}.{base}"),
+                None => base,
+            };
+        }
     };
-    format!("{mapped}-{version}")
+    let base = format!("{mapped}-{version}");
+    match cross_region_prefix() {
+        Some(prefix) => format!("{prefix}.{base}"),
+        None => base,
+    }
 }
 
 fn strip_date_suffix(s: &str) -> &str {
@@ -345,9 +367,10 @@ impl Bedrock {
     }
 
     fn endpoint_url(&self, model_id: &str) -> String {
+        let encoded = super::urlenc(model_id);
         format!(
             "https://bedrock-runtime.{}.amazonaws.com/model/{}/invoke-with-response-stream",
-            self.region, model_id
+            self.region, encoded
         )
     }
 
@@ -359,6 +382,7 @@ impl Bedrock {
     ) -> Result<StreamResponse, AgentError> {
         let bedrock_id = bedrock_model_id(&model.id);
         let url = self.endpoint_url(&bedrock_id);
+        debug!(maki_id = %model.id, bedrock_id = %bedrock_id, %url, "resolved Bedrock model");
         let json_body = serde_json::to_vec(body)?;
 
         let host = url
