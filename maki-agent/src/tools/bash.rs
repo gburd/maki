@@ -171,8 +171,17 @@ impl Bash {
             "bash executing"
         );
 
-        #[cfg(unix)]
-        let mut std_cmd = {
+        let effective_cwd = workdir
+            .as_ref()
+            .map(|d| std::path::PathBuf::from(d.as_str()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+
+#[cfg(unix)]
+        let mut std_cmd = if let Some(wrapped) =
+            crate::sandbox::wrap_command(command, &effective_cwd)
+        {
+            wrapped
+        } else {
             let mut cmd = StdCommand::new("bash");
             cmd.arg("-c").arg(command);
             cmd
@@ -188,7 +197,12 @@ impl Bash {
         std_cmd.env("GIT_TERMINAL_PROMPT", "0");
 
         // detach from tty so commands that try to read /dev/tty fail instead of hanging
-        #[cfg(unix)]
+        let effective_cwd = workdir
+            .as_ref()
+            .map(|d| std::path::PathBuf::from(d.as_str()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+
+#[cfg(unix)]
         unsafe {
             std_cmd.pre_exec(|| {
                 libc::setsid();
