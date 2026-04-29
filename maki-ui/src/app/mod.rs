@@ -188,7 +188,7 @@ impl App {
             chats: vec![Chat::new("Main".into(), ui_config)],
             active_chat: 0,
             chat_index: HashMap::new(),
-            input_box: InputBox::new(InputHistory::load(&storage, input_history_size)),
+            input_box: InputBox::new(InputHistory::load(&storage, input_history_size), ui_config.keybindings),
             command_palette: CommandPalette::new(custom_commands, mcp_reader.clone()),
             task_picker: ListPicker::new(),
             task_picker_original: None,

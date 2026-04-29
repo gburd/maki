@@ -314,6 +314,11 @@ impl UiConfig {
                 .unwrap_or(DEFAULT_TYPEWRITER_MS_PER_CHAR),
             mouse_scroll_lines: f.mouse_scroll_lines.unwrap_or(DEFAULT_MOUSE_SCROLL_LINES),
             tool_output_lines: ToolOutputLines::from_file(f.tool_output_lines),
+            keybindings: f
+                .keybindings
+                .as_deref()
+                .map(KeybindingMode::from_config_str)
+                .unwrap_or_default(),
         }
     }
 
