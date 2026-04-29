@@ -1084,6 +1084,16 @@ impl App {
                 self.flash(msg.into());
                 vec![]
             }
+            "/sandbox" => {
+                let enabled = maki_agent::sandbox::toggle();
+                let msg = if enabled {
+                    "Sandbox mode enabled"
+                } else {
+                    "Sandbox mode disabled"
+                };
+                self.flash(msg.into());
+                vec![]
+            }
             "/thinking" => {
                 if !self.state.model.provider.supports_thinking() {
                     self.flash("Thinking requires Anthropic, Mistral or Synthetic provider".into());
