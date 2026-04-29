@@ -20,6 +20,7 @@ mod render_worker;
 mod selection;
 pub mod splash;
 mod storage_writer;
+pub mod keybinding_mode;
 mod text_buffer;
 mod theme;
 pub mod update;
