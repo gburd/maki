@@ -352,12 +352,7 @@ fn pascal_to_snake(s: &str) -> String {
 /// Map a Claude model ID to a maki provider/model spec.
 fn map_claude_model(model: &str) -> String {
     if model.contains("us.anthropic.") || model.contains("eu.anthropic.") {
-        let base = if model.contains(':') {
-            format!("bedrock/{model}")
-        } else {
-            format!("bedrock/{model}:0")
-        };
-        return base;
+        return format!("bedrock/{model}");
     }
 
     if model.starts_with("claude-") {
@@ -511,7 +506,7 @@ mod tests {
         assert!(parse_claude_permission(input).is_none());
     }
 
-    #[test_case("us.anthropic.claude-opus-4-6-v1", "bedrock/us.anthropic.claude-opus-4-6-v1:0" ; "bedrock_us_no_version")]
+    #[test_case("us.anthropic.claude-opus-4-6-v1", "bedrock/us.anthropic.claude-opus-4-6-v1" ; "bedrock_us")]
     #[test_case("eu.anthropic.claude-sonnet-4-5-20250514-v1:0", "bedrock/eu.anthropic.claude-sonnet-4-5-20250514-v1:0" ; "bedrock_eu_with_version")]
     #[test_case("claude-sonnet-4-5-20250514", "anthropic/claude-sonnet-4-5-20250514" ; "anthropic_direct")]
     #[test_case("custom-model", "custom-model" ; "passthrough")]
@@ -578,7 +573,7 @@ mod tests {
         assert_eq!(config.model.as_deref(), Some("us.anthropic.claude-opus-4-6-v1"));
         assert_eq!(
             config.mapped_model.as_deref(),
-            Some("bedrock/us.anthropic.claude-opus-4-6-v1:0")
+            Some("bedrock/us.anthropic.claude-opus-4-6-v1")
         );
         assert!(config.yolo);
         // Only AWS_REGION and ANTHROPIC_API_KEY should pass the filter
@@ -677,7 +672,7 @@ mod tests {
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
         assert_eq!(
             result.as_deref(),
-            Some("bedrock/us.anthropic.claude-opus-4-6-v1:0")
+            Some("bedrock/us.anthropic.claude-opus-4-6-v1")
         );
 
         // Check files were created
@@ -688,7 +683,7 @@ mod tests {
         // Verify config.toml
         let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
         assert!(config_content.contains("always_yolo = true"));
-        assert!(config_content.contains("bedrock/us.anthropic.claude-opus-4-6-v1:0"));
+        assert!(config_content.contains("bedrock/us.anthropic.claude-opus-4-6-v1"));
 
         // Verify .env (values are double-quoted)
         let env_content = fs::read_to_string(dest_dir.path().join(".env")).unwrap();
@@ -990,14 +985,14 @@ mod tests {
             run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
         assert_eq!(
             result.as_deref(),
-            Some("bedrock/us.anthropic.claude-opus-4-6-v1:0")
+            Some("bedrock/us.anthropic.claude-opus-4-6-v1")
         );
 
         // Verify config.toml
         let config_content =
             fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
         assert!(config_content.contains("always_yolo = true"));
-        assert!(config_content.contains(r#"default_model = "bedrock/us.anthropic.claude-opus-4-6-v1:0""#));
+        assert!(config_content.contains(r#"default_model = "bedrock/us.anthropic.claude-opus-4-6-v1""#));
 
         // Verify .env is parseable by dotenvy and has correct value
         let parsed: HashMap<String, String> =

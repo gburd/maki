@@ -113,7 +113,7 @@ pub(crate) fn models() -> &'static [ModelEntry] {
 
 /// Resolves the optional cross-region inference profile prefix.
 /// Set `AWS_BEDROCK_CROSS_REGION` to a region prefix (e.g., `us`, `eu`) to
-/// use cross-region inference profiles (e.g., `us.anthropic.claude-opus-4-7-v1:0`).
+/// use cross-region inference profiles (e.g., `us.anthropic.claude-opus-4-7-v1`).
 fn cross_region_prefix() -> Option<String> {
     env::var("AWS_BEDROCK_CROSS_REGION")
         .ok()
@@ -122,19 +122,19 @@ fn cross_region_prefix() -> Option<String> {
 
 /// Maps maki model IDs to Bedrock model identifiers.
 /// If `AWS_BEDROCK_CROSS_REGION` is set, prepends the region prefix
-/// (e.g., `us.anthropic.claude-opus-4-7-v1:0`).
+/// (e.g., `us.anthropic.claude-opus-4-7-v1`).
 fn bedrock_model_id(model_id: &str) -> String {
     // Passthrough fully-qualified IDs (contain '.' or ':')
     if model_id.contains('.') || model_id.contains(':') {
         return model_id.to_string();
     }
     let lookup = strip_date_suffix(model_id);
-    let (mapped, version) = match lookup {
-        "claude-haiku-4-5" => ("anthropic.claude-haiku-4-5", "v1:0"),
-        "claude-sonnet-4-5" => ("anthropic.claude-sonnet-4-5", "v2:0"),
-        "claude-sonnet-4-6" => ("anthropic.claude-sonnet-4-6", "v1:0"),
-        "claude-opus-4-6" => ("anthropic.claude-opus-4-6", "v1:0"),
-        "claude-opus-4-7" => ("anthropic.claude-opus-4-7", "v1:0"),
+    let mapped = match lookup {
+        "claude-haiku-4-5" => "anthropic.claude-haiku-4-5-v1",
+        "claude-sonnet-4-5" => "anthropic.claude-sonnet-4-5-v2",
+        "claude-sonnet-4-6" => "anthropic.claude-sonnet-4-6-v1",
+        "claude-opus-4-6" => "anthropic.claude-opus-4-6-v1",
+        "claude-opus-4-7" => "anthropic.claude-opus-4-7-v1",
         _ => {
             let base = format!("anthropic.{model_id}");
             return match cross_region_prefix() {
@@ -143,10 +143,9 @@ fn bedrock_model_id(model_id: &str) -> String {
             };
         }
     };
-    let base = format!("{mapped}-{version}");
     match cross_region_prefix() {
-        Some(prefix) => format!("{prefix}.{base}"),
-        None => base,
+        Some(prefix) => format!("{prefix}.{mapped}"),
+        None => mapped.to_string(),
     }
 }
 
@@ -367,10 +366,12 @@ impl Bedrock {
     }
 
     fn endpoint_url(&self, model_id: &str) -> String {
-        let encoded = super::urlenc(model_id);
+        // Bedrock model IDs contain only alphanumeric, '.', '-', and ':' —
+        // all valid in URL path segments per RFC 3986.  We must NOT
+        // percent-encode ':' because Bedrock rejects '%3A' in model IDs.
         format!(
             "https://bedrock-runtime.{}.amazonaws.com/model/{}/invoke-with-response-stream",
-            self.region, encoded
+            self.region, model_id
         )
     }
 
@@ -663,15 +664,15 @@ aws_session_token = DEV_TOKEN
     fn bedrock_model_id_standard_mapping() {
         assert_eq!(
             bedrock_model_id("claude-sonnet-4-5"),
-            "anthropic.claude-sonnet-4-5-v2:0"
+            "anthropic.claude-sonnet-4-5-v2"
         );
         assert_eq!(
             bedrock_model_id("claude-haiku-4-5"),
-            "anthropic.claude-haiku-4-5-v1:0"
+            "anthropic.claude-haiku-4-5-v1"
         );
         assert_eq!(
             bedrock_model_id("claude-opus-4-7"),
-            "anthropic.claude-opus-4-7-v1:0"
+            "anthropic.claude-opus-4-7-v1"
         );
     }
 
@@ -679,7 +680,7 @@ aws_session_token = DEV_TOKEN
     fn bedrock_model_id_with_date_suffix() {
         assert_eq!(
             bedrock_model_id("claude-sonnet-4-6-20250514"),
-            "anthropic.claude-sonnet-4-6-v1:0"
+            "anthropic.claude-sonnet-4-6-v1"
         );
     }
 
