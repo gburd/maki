@@ -231,6 +231,28 @@ impl AgentLoop {
         self.history = outcome.history;
         self.sync_shared_history();
 
+        // If the agent fell back to a different model, update the slot so subsequent
+        // turns (and the next agent run) use the working model.
+        let current_slot = self.model_slot.load();
+        if outcome.effective_model.spec() != current_slot.model.spec() {
+            let new_model = outcome.effective_model.clone();
+            if new_model.provider == current_slot.model.provider
+                && new_model.dynamic_slug == current_slot.model.dynamic_slug
+            {
+                self.model_slot.store(Arc::new(ModelSlot {
+                    model: new_model,
+                    provider: Arc::clone(&current_slot.provider),
+                }));
+            } else if let Ok(new_provider) =
+                maki_providers::provider::from_model(&new_model, self.timeouts)
+            {
+                self.model_slot.store(Arc::new(ModelSlot {
+                    model: new_model,
+                    provider: Arc::from(new_provider),
+                }));
+            }
+        }
+
         if matches!(outcome.result, Err(AgentError::Cancelled)) {
             self.min_run_id = run_id + 1;
         }

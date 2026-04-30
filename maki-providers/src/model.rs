@@ -192,6 +192,21 @@ impl Model {
         Self::from_tier(provider, tier)
     }
 
+    /// Returns other models in the same provider+tier, excluding the current model.
+    /// Used for graceful fallback when the primary model is rejected.
+    pub fn fallbacks_in_tier(&self) -> Vec<Model> {
+        let entries = models_for_provider(self.provider);
+        entries
+            .iter()
+            .filter(|e| {
+                e.tier == self.tier && !e.prefixes.iter().any(|p| self.id.starts_with(p))
+            })
+            .filter_map(|e| {
+                Model::from_spec(&format!("{}/{}", self.provider, e.prefixes[0])).ok()
+            })
+            .collect()
+    }
+
     pub fn from_spec(spec: &str) -> Result<Self, ModelError> {
         let (provider_str, model_id) = spec.split_once('/').ok_or(ModelError::InvalidFormat)?;
 
@@ -412,6 +427,35 @@ mod tests {
                     "{provider}/{tier}: expected exactly 1 default, found {count}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn fallbacks_in_tier_bedrock_strong() {
+        let model = Model::from_spec("bedrock/claude-opus-4-7").unwrap();
+        let fallbacks = model.fallbacks_in_tier();
+        let ids: Vec<&str> = fallbacks.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&"claude-opus-4-6"), "expected claude-opus-4-6 in {ids:?}");
+        assert!(
+            !ids.iter().any(|id| id.starts_with("claude-opus-4-7")),
+            "should not contain original model"
+        );
+    }
+
+    #[test]
+    fn fallbacks_in_tier_single_model_tier() {
+        let model = Model::from_spec("bedrock/claude-haiku-4-5").unwrap();
+        let fallbacks = model.fallbacks_in_tier();
+        assert!(fallbacks.is_empty(), "only one weak-tier model in bedrock");
+    }
+
+    #[test]
+    fn fallbacks_in_tier_preserves_provider() {
+        let model = Model::from_spec("anthropic/claude-opus-4-7").unwrap();
+        let fallbacks = model.fallbacks_in_tier();
+        for fb in &fallbacks {
+            assert_eq!(fb.provider, ProviderKind::Anthropic);
+            assert_eq!(fb.tier, ModelTier::Strong);
         }
     }
 

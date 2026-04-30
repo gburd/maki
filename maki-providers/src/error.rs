@@ -46,6 +46,11 @@ impl AgentError {
         matches!(self, Self::Api { status: 401, .. })
     }
 
+    pub fn is_model_invalid(&self) -> bool {
+        matches!(self, Self::Api { status: 400, message }
+            if message.contains("model") || message.contains("Model"))
+    }
+
     pub fn user_message(&self) -> String {
         match self {
             Self::Config { message } => message.clone(),
@@ -132,6 +137,18 @@ mod tests {
     #[test_case(403, false ; "forbidden")]
     fn api_auth_error(status: u16, expected: bool) {
         assert_eq!(api(status).is_auth_error(), expected);
+    }
+
+    #[test_case(400, "The provided model identifier is invalid", true  ; "bedrock_model_invalid")]
+    #[test_case(400, "Model not found", true  ; "model_not_found")]
+    #[test_case(400, "bad request", false ; "generic_bad_request")]
+    #[test_case(401, "model access denied", false ; "wrong_status")]
+    fn api_model_invalid(status: u16, message: &str, expected: bool) {
+        let err = AgentError::Api {
+            status,
+            message: message.into(),
+        };
+        assert_eq!(err.is_model_invalid(), expected);
     }
 
     #[test_case(429, "Rate limited"        ; "rate_limited")]

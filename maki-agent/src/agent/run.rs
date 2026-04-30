@@ -31,6 +31,7 @@ enum TurnOutcome {
 pub struct RunOutcome {
     pub history: History,
     pub result: Result<(), AgentError>,
+    pub effective_model: Model,
 }
 
 pub struct AgentParams {
@@ -54,6 +55,7 @@ pub struct AgentRunParams {
 pub struct Agent {
     provider: Arc<dyn Provider>,
     model: Arc<Model>,
+    fallback_models: Vec<Model>,
     history: History,
     system: String,
     event_tx: EventSender,
@@ -82,9 +84,12 @@ pub struct Agent {
 
 impl Agent {
     pub fn new(params: AgentParams, run: AgentRunParams) -> Self {
+        let fallback_models = params.model.fallbacks_in_tier();
         Self {
             provider: params.provider,
             model: Arc::new(params.model),
+            fallback_models,
+            skills: params.skills,
             config: params.config,
             tool_output_lines: params.tool_output_lines,
             permissions: params.permissions,
@@ -165,9 +170,11 @@ impl Agent {
             sanitize_cancelled_history(&mut self.history, self.rollback_len);
         }
 
+        let effective_model = (*self.model).clone();
         RunOutcome {
             history: self.history,
             result,
+            effective_model,
         }
     }
 
@@ -206,6 +213,20 @@ impl Agent {
             }
             Err(e) if e.is_auth_error() => {
                 return self.wait_for_reauth(e).await;
+            }
+            Err(e) if e.is_model_invalid() && !self.fallback_models.is_empty() => {
+                let next = self.fallback_models.remove(0);
+                warn!(
+                    from = %self.model.id,
+                    to = %next.id,
+                    "model rejected, falling back"
+                );
+                let _ = self.event_tx.send(AgentEvent::ModelFallback {
+                    from: self.model.spec(),
+                    to: next.spec(),
+                });
+                self.model = Arc::new(next);
+                return Ok(TurnOutcome::Continue);
             }
             Err(e) => {
                 error!(error = %e, model = %self.model.id, self.num_turns, "stream_message failed");

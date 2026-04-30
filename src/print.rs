@@ -276,6 +276,12 @@ pub fn run(
                     println!("{}", serde_json::to_string(&envelope)?);
                 }
             }
+            AgentEvent::ModelFallback { from, to } => {
+                eprintln!("Model {from} unavailable, falling back to {to}");
+                if is_stream_json {
+                    println!("{}", serde_json::to_string(&envelope)?);
+                }
+            }
             AgentEvent::TurnComplete(tc) => {
                 if is_stream_json {
                     println!("{}", serde_json::to_string(&envelope)?);

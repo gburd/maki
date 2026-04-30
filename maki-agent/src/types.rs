@@ -508,6 +508,10 @@ pub enum AgentEvent {
         scopes: Vec<String>,
     },
     AuthRequired,
+    ModelFallback {
+        from: String,
+        to: String,
+    },
     SubagentHistory {
         tool_use_id: String,
         messages: Vec<Message>,

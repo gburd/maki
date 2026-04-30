@@ -47,6 +47,10 @@ pub enum ChatEventResult {
         scopes: Vec<String>,
     },
     AuthRequired,
+    ModelFallback {
+        from: String,
+        to: String,
+    },
 }
 
 pub struct Chat {
@@ -141,6 +145,9 @@ impl Chat {
             }
             AgentEvent::AuthRequired => {
                 return ChatEventResult::AuthRequired;
+            }
+            AgentEvent::ModelFallback { from, to } => {
+                return ChatEventResult::ModelFallback { from, to };
             }
             AgentEvent::ToolSnapshot { id, snapshot } => {
                 self.messages_panel.tool_snapshot(&id, snapshot);

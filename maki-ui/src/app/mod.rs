@@ -999,6 +999,12 @@ impl App {
                     ));
                     self.pending_input = PendingInput::AuthRetry;
                 }
+                ChatEventResult::ModelFallback { from, to } => {
+                    self.flash(format!(
+                        "Model {from} unavailable, using {to}"
+                    ));
+                    return vec![Action::ChangeModel(to)];
+                }
                 ChatEventResult::PermissionRequest { .. }
                 | ChatEventResult::QueueItemConsumed { .. } => unreachable!(),
                 ChatEventResult::Continue => {}
