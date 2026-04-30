@@ -1108,6 +1108,7 @@ impl App {
                 }
                 vec![]
             }
+            "/doctor" => self.cmd_doctor(),
             "/exit" => self.quit(),
             name if name.starts_with("/project:") || name.starts_with("/user:") => {
                 self.execute_custom_command(name, &cmd.args)
@@ -1229,6 +1230,29 @@ impl App {
             Err(e) => self.flash(format!("cd: {e}")),
         }
         vec![]
+    }
+
+    fn cmd_doctor(&mut self) -> Vec<Action> {
+        let report = maki_config::doctor::gather_report(&self.state.model.spec());
+        let prompt = format!(
+            "<doctor-command>\n\
+             The user ran the /doctor command. Below is a diagnostic report gathered from the \
+             local system. Analyze the findings, report any problems, and offer concrete \
+             suggestions to fix each issue. If everything looks healthy, say so briefly.\n\n\
+             {report}\n\
+             </doctor-command>"
+        );
+        let msg = QueuedMessage {
+            text: prompt,
+            images: Vec::new(),
+        };
+        if self.status == Status::Streaming {
+            self.queue_and_notify(msg);
+            vec![]
+        } else {
+            self.run_id += 1;
+            self.start_from_queue(&msg)
+        }
     }
 
     fn cmd_memory(&mut self) -> Vec<Action> {
