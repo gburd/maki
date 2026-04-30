@@ -1,3 +1,4 @@
+pub mod doctor;
 pub mod import;
 
 use std::collections::HashMap;

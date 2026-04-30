@@ -97,6 +97,11 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         max_args: 1,
     },
     BuiltinCommand {
+        name: "/doctor",
+        description: "Diagnose configuration and connectivity issues",
+        max_args: 0,
+    },
+    BuiltinCommand {
         name: "/exit",
         description: "Exit the application",
         max_args: 0,
