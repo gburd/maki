@@ -66,10 +66,8 @@ pub fn run(cli: Cli) -> Result<()> {
 
     // First-run config import wizard
     if !cli.print && io::stdin().is_terminal() {
-        if let Some(sources) = maki_config::import::needs_import() {
-            maki_config::import::run_wizard(&sources)
-                .map_err(|e| color_eyre::eyre::eyre!(e))?;
-        }
+        maki_config::import::run_wizard()
+            .map_err(|e| color_eyre::eyre::eyre!(e))?;
     }
 
     let cwd = env::current_dir().unwrap_or_else(|_| ".".into());
