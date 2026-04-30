@@ -1,3 +1,5 @@
+pub mod import;
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -844,7 +846,7 @@ fn build_permissions(
     PermissionsConfig { allow_all, rules }
 }
 
-fn global_dir() -> Option<PathBuf> {
+pub fn global_dir() -> Option<PathBuf> {
     paths::config_dir().ok()
 }
 
