@@ -66,8 +66,11 @@ pub fn run(cli: Cli) -> Result<()> {
 
     // First-run config import wizard
     if !cli.print && io::stdin().is_terminal() {
-        maki_config::import::run_wizard()
-            .map_err(|e| color_eyre::eyre::eyre!(e))?;
+        if let Some(model_spec) = maki_config::import::run_wizard()
+            .map_err(|e| color_eyre::eyre::eyre!(e))?
+        {
+            crate::setup::persist_model(&storage, &model_spec);
+        }
     }
 
     let cwd = env::current_dir().unwrap_or_else(|_| ".".into());

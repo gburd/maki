@@ -120,12 +120,13 @@ fn prompt_yes_no(reader: &mut impl BufRead, out: &mut impl Write) -> Result<bool
 
 /// Run the interactive first-run import wizard.
 ///
-/// Returns `Ok(true)` if anything was imported, `Ok(false)` if skipped or config already exists.
-pub fn run_wizard() -> Result<bool, String> {
+/// Returns the imported model spec if a model was imported, or `None` if skipped
+/// or config already exists.
+pub fn run_wizard() -> Result<Option<String>, String> {
     let dest = global_dir().ok_or_else(|| "cannot determine config directory".to_string())?;
 
     if dest.join(CONFIG_FILE).exists() {
-        return Ok(false);
+        return Ok(None);
     }
 
     let settings_path = dirs::home_dir().map(|h| h.join(".claude").join("settings.json"));
@@ -141,7 +142,7 @@ pub fn run_wizard() -> Result<bool, String> {
         Some(c) => c,
         None => {
             write_default_config(&dest)?;
-            return Ok(false);
+            return Ok(None);
         }
     };
 
@@ -159,7 +160,7 @@ fn run_wizard_inner(
     dest: &Path,
     reader: &mut impl BufRead,
     out: &mut impl Write,
-) -> Result<bool, String> {
+) -> Result<Option<String>, String> {
     writeln!(out, "\nWelcome to maki!\n").map_err(|e| e.to_string())?;
     writeln!(out, "Found Claude Code config at {}\n", config.path.display())
         .map_err(|e| e.to_string())?;
@@ -274,7 +275,12 @@ fn run_wizard_inner(
         writeln!(out, "\nConfig written to {}/config.toml\n", dest.display())
             .map_err(|e| e.to_string())?;
 
-        Ok(true)
+        let imported_model = if import_model {
+            config.mapped_model.clone()
+        } else {
+            None
+        };
+        Ok(imported_model)
     } else {
         write_default_config(dest)?;
         writeln!(out, "Created default config at {}/config.toml", dest.display())
@@ -284,7 +290,7 @@ fn run_wizard_inner(
             "You can edit it anytime or run `maki config import` later.\n"
         )
         .map_err(|e| e.to_string())?;
-        Ok(false)
+        Ok(None)
     }
 }
 
@@ -669,7 +675,10 @@ mod tests {
         let mut output = Vec::new();
 
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
-        assert!(result);
+        assert_eq!(
+            result.as_deref(),
+            Some("bedrock/us.anthropic.claude-opus-4-6-v1:0")
+        );
 
         // Check files were created
         assert!(dest_dir.path().join("config.toml").exists());
@@ -719,7 +728,7 @@ mod tests {
         let mut output = Vec::new();
 
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
-        assert!(!result);
+        assert!(result.is_none());
 
         // config.toml should exist (default)
         assert!(dest_dir.path().join("config.toml").exists());
@@ -759,7 +768,10 @@ mod tests {
         let mut output = Vec::new();
 
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
-        assert!(result);
+        assert_eq!(
+            result.as_deref(),
+            Some("anthropic/claude-sonnet-4-5-20250514")
+        );
 
         let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
         assert!(config_content.contains("anthropic/claude-sonnet-4-5-20250514"));
@@ -791,7 +803,10 @@ mod tests {
         let mut output = Vec::new();
 
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
-        assert!(result);
+        assert_eq!(
+            result.as_deref(),
+            Some("anthropic/claude-sonnet-4-5-20250514")
+        );
 
         let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
         assert!(config_content.contains("anthropic/claude-sonnet-4-5-20250514"));
@@ -973,7 +988,10 @@ mod tests {
 
         let result =
             run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
-        assert!(result);
+        assert_eq!(
+            result.as_deref(),
+            Some("bedrock/us.anthropic.claude-opus-4-6-v1:0")
+        );
 
         // Verify config.toml
         let config_content =
