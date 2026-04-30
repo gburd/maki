@@ -2455,6 +2455,7 @@ dependencies = [
  "dotenvy",
  "maki-config-macro",
  "serde",
+ "serde_json",
  "tempfile",
  "test-case",
  "thiserror 2.0.18",

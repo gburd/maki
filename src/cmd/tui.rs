@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, IsTerminal, Read as _};
 use std::sync::Arc;
 
 use color_eyre::Result;
@@ -72,6 +72,14 @@ fn read_initial_prompt(cli_prompt: Option<String>) -> Result<Option<String>> {
 pub fn run(cli: Cli) -> Result<()> {
     let storage = DataDir::resolve().context("resolve data directory")?;
     maki_providers::tier_map::load_from_storage(&storage);
+
+    // First-run config import wizard
+    if !cli.print && io::stdin().is_terminal() {
+        if let Some(sources) = maki_config::import::needs_import() {
+            maki_config::import::run_wizard(&sources)
+                .map_err(|e| color_eyre::eyre::eyre!(e))?;
+        }
+    }
 
     let cwd = env::current_dir().unwrap_or_else(|_| ".".into());
     let mut config = load_config(&cwd, cli.no_rtk);
