@@ -103,7 +103,8 @@ fn section_provider_auth(out: &mut String, model_spec: &str) {
                 .unwrap_or(false);
             let has_keys = env::var("AWS_ACCESS_KEY_ID").is_ok()
                 && env::var("AWS_SECRET_ACCESS_KEY").is_ok();
-            let has_profile = dirs::home_dir()
+            let has_profile = etcetera::home_dir()
+                .ok()
                 .map(|h| h.join(".aws").join("credentials").is_file())
                 .unwrap_or(false);
 

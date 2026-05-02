@@ -23,6 +23,7 @@ aws-smithy-types = { workspace = true }
 bytes = { workspace = true }
 wait-timeout = { workspace = true }
 fastrand = { workspace = true }
+etcetera = { workspace = true }
 
 [dev-dependencies]
 test-case = { workspace = true }

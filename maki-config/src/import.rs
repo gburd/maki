@@ -129,7 +129,9 @@ pub fn run_wizard() -> Result<Option<String>, String> {
         return Ok(None);
     }
 
-    let settings_path = dirs::home_dir().map(|h| h.join(".claude").join("settings.json"));
+    let settings_path = etcetera::home_dir()
+        .ok()
+        .map(|h| h.join(".claude").join("settings.json"));
 
     let config = settings_path
         .as_ref()

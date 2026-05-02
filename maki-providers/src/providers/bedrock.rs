@@ -221,7 +221,7 @@ fn read_shared_credentials() -> Option<AwsCredentials> {
     let path = env::var("AWS_SHARED_CREDENTIALS_FILE")
         .ok()
         .map(std::path::PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|h| h.join(".aws").join("credentials")))?;
+        .or_else(|| etcetera::home_dir().ok().map(|h| h.join(".aws").join("credentials")))?;
     let content = std::fs::read_to_string(&path).ok()?;
     let profile = env::var("AWS_PROFILE").unwrap_or_else(|_| "default".into());
     parse_ini_profile(&content, &profile)
