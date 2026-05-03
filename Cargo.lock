@@ -1085,27 +1085,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
-name = "dirs-sys"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
-dependencies = [
- "libc",
- "option-ext",
- "redox_users",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "dispatch2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,6 +1194,16 @@ name = "error-code"
 version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dea2df4cf52843e0452895c455a1a2cfbb842a1e7329671acf418fdc53ed4c59"
+
+[[package]]
+name = "etcetera"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "euclid"
@@ -2270,15 +2259,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
-name = "libredox"
-version = "0.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ddbf48fd451246b1f8c2610bd3b4ac0cc6e149d89832867093ab69a17194f08"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "libz-sys"
 version = "1.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2374,7 +2354,7 @@ dependencies = [
 
 [[package]]
 name = "maki"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "clap",
  "color-eyre",
@@ -2401,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "maki-agent"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "arc-swap",
  "async-io",
@@ -2409,7 +2389,6 @@ dependencies = [
  "async-process",
  "base64",
  "bitflags 2.11.0",
- "dirs",
  "event-listener",
  "flume 0.11.1",
  "futures-lite",
@@ -2442,18 +2421,17 @@ dependencies = [
  "toml",
  "toml_edit",
  "tracing",
- "tree-sitter",
- "tree-sitter-bash",
  "uuid",
 ]
 
 [[package]]
 name = "maki-config"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
- "dirs",
  "dotenvy",
+ "etcetera",
  "maki-config-macro",
+ "maki-storage",
  "serde",
  "serde_json",
  "tempfile",
@@ -2466,7 +2444,7 @@ dependencies = [
 
 [[package]]
 name = "maki-config-macro"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2475,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "maki-docgen"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "maki-agent",
  "maki-config",
@@ -2488,7 +2466,7 @@ dependencies = [
 
 [[package]]
 name = "maki-highlight"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "syntect",
  "test-case",
@@ -2497,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "maki-interpreter"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "monty",
  "serde_json",
@@ -2508,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "maki-lsp"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-io",
  "async-lock",
@@ -2527,21 +2505,24 @@ dependencies = [
 
 [[package]]
 name = "maki-lua"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
- "dirs",
+ "event-listener",
  "flume 0.11.1",
  "futures-lite",
  "htmd",
+ "humantime",
  "include_dir",
  "isahc",
  "libc",
  "maki-agent",
  "maki-config",
  "maki-highlight",
+ "maki-storage",
  "mlua",
  "regex",
  "serde_json",
+ "serde_yaml",
  "smol",
  "tempfile",
  "test-case",
@@ -2570,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "maki-providers"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -2578,7 +2559,7 @@ dependencies = [
  "aws-smithy-types",
  "base64",
  "bytes",
- "dirs",
+ "etcetera",
  "fastrand",
  "flume 0.11.1",
  "futures-lite",
@@ -2598,9 +2579,9 @@ dependencies = [
 
 [[package]]
 name = "maki-storage"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
- "dirs",
+ "etcetera",
  "getrandom 0.3.4",
  "isahc",
  "libc",
@@ -2615,7 +2596,7 @@ dependencies = [
 
 [[package]]
 name = "maki-tool-macro"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2624,7 +2605,7 @@ dependencies = [
 
 [[package]]
 name = "maki-ui"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "arboard",
  "arc-swap",
@@ -2634,7 +2615,6 @@ dependencies = [
  "color-eyre",
  "criterion",
  "crossterm",
- "dirs",
  "flume 0.11.1",
  "futures-lite",
  "getrandom 0.3.4",
@@ -3162,12 +3142,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "option-ext"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-float"
@@ -3926,17 +3900,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags 2.11.0",
-]
-
-[[package]]
-name = "redox_users"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
-dependencies = [
- "getrandom 0.2.17",
- "libredox",
- "thiserror 2.0.18",
 ]
 
 [[package]]
