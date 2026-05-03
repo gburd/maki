@@ -274,6 +274,17 @@ impl Agent {
         self.total_usage += usage;
 
         if has_tools {
+            // If max_tokens fired while streaming tool arguments, the tool JSON
+            // is truncated and will parse as empty/garbage. Don't dispatch it —
+            // re-prompt so the model can produce a complete response instead.
+            if stop_reason == Some(StopReason::MaxTokens) {
+                warn!(
+                    self.num_turns,
+                    "response truncated (max_tokens) with tool call, re-prompting without dispatching"
+                );
+                self.history.push(response.message);
+                return Ok(TurnOutcome::Continue);
+            }
             self.process_tool_calls(response).await?;
         } else {
             self.history.push(response.message);
