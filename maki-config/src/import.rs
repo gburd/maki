@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 use crate::global_dir;
 
-const CONFIG_FILE: &str = "config.toml";
+const INIT_LUA: &str = "init.lua";
+const CONFIG_FILE: &str = "config.toml"; // legacy sentinel only — no longer written
 const PERMISSIONS_FILE: &str = "permissions.toml";
 const ENV_FILE: &str = ".env";
 
@@ -125,7 +126,8 @@ fn prompt_yes_no(reader: &mut impl BufRead, out: &mut impl Write) -> Result<bool
 pub fn run_wizard() -> Result<Option<String>, String> {
     let dest = global_dir().ok_or_else(|| "cannot determine config directory".to_string())?;
 
-    if dest.join(CONFIG_FILE).exists() {
+    // Skip if already configured — check both new (init.lua) and legacy (config.toml)
+    if dest.join(INIT_LUA).exists() || dest.join(CONFIG_FILE).exists() {
         return Ok(None);
     }
 
@@ -232,9 +234,9 @@ fn run_wizard_inner(
         };
         let yolo_for_config = import_yolo;
 
-        let config_toml = generate_config_toml(model_for_config, yolo_for_config);
-        fs::write(dest.join(CONFIG_FILE), &config_toml)
-            .map_err(|e| format!("failed to write config.toml: {e}"))?;
+        let init_lua = generate_init_lua(model_for_config, yolo_for_config);
+        fs::write(dest.join(INIT_LUA), &init_lua)
+            .map_err(|e| format!("failed to write init.lua: {e}"))?;
 
         writeln!(out, "Importing...").map_err(|e| e.to_string())?;
 
@@ -274,7 +276,7 @@ fn run_wizard_inner(
             }
         }
 
-        writeln!(out, "\nConfig written to {}/config.toml\n", dest.display())
+        writeln!(out, "\nConfig written to {}/init.lua\n", dest.display())
             .map_err(|e| e.to_string())?;
 
         let imported_model = if import_model {
@@ -285,7 +287,7 @@ fn run_wizard_inner(
         Ok(imported_model)
     } else {
         write_default_config(dest)?;
-        writeln!(out, "Created default config at {}/config.toml", dest.display())
+        writeln!(out, "Created default config at {}/init.lua", dest.display())
             .map_err(|e| e.to_string())?;
         writeln!(
             out,
@@ -364,23 +366,21 @@ fn map_claude_model(model: &str) -> String {
     model.to_string()
 }
 
-fn generate_config_toml(model: Option<&str>, yolo: bool) -> String {
-    let mut out = String::new();
+fn generate_init_lua(model: Option<&str>, yolo: bool) -> String {
+    if model.is_none() && !yolo {
+        return "-- maki configuration\n-- See: https://maki.sh/docs/configuration\nmaki.setup({})\n"
+            .into();
+    }
+    let mut fields = String::new();
     if yolo {
-        out.push_str("always_yolo = true\n");
+        fields.push_str("    always_yolo = true,\n");
     }
     if let Some(m) = model {
-        if yolo {
-            out.push('\n');
-        }
-        writeln!(out, "[provider]").unwrap();
-        writeln!(out, "default_model = \"{m}\"").unwrap();
+        fields.push_str("    provider = {\n");
+        fields.push_str(&format!("        default_model = \"{m}\",\n"));
+        fields.push_str("    },\n");
     }
-    if out.is_empty() {
-        // Write a minimal config so the file exists and prevents re-triggering
-        out.push_str("# maki configuration\n# See: https://maki.sh/docs/configuration\n");
-    }
-    out
+    format!("maki.setup({{\n{fields}}})\n")
 }
 
 fn write_env_file_from_vars(vars: &[(String, String)], dest_dir: &Path) -> Result<usize, String> {
@@ -474,9 +474,10 @@ fn escape_toml_string(s: &str) -> String {
 pub fn write_default_config(dest_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dest_dir)
         .map_err(|e| format!("failed to create {}: {e}", dest_dir.display()))?;
-    let content = "# maki configuration\n# See: https://maki.sh/docs/configuration\n";
-    fs::write(dest_dir.join(CONFIG_FILE), content)
-        .map_err(|e| format!("failed to write config.toml: {e}"))?;
+    let content =
+        "-- maki configuration\n-- See: https://maki.sh/docs/configuration\nmaki.setup({})\n";
+    fs::write(dest_dir.join(INIT_LUA), content)
+        .map_err(|e| format!("failed to write init.lua: {e}"))?;
     Ok(())
 }
 
@@ -678,12 +679,12 @@ mod tests {
         );
 
         // Check files were created
-        assert!(dest_dir.path().join("config.toml").exists());
+        assert!(dest_dir.path().join("init.lua").exists());
         assert!(dest_dir.path().join(".env").exists());
         assert!(dest_dir.path().join("permissions.toml").exists());
 
-        // Verify config.toml
-        let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
+        // Verify init.lua
+        let config_content = fs::read_to_string(dest_dir.path().join("init.lua")).unwrap();
         assert!(config_content.contains("always_yolo = true"));
         assert!(config_content.contains("bedrock/us.anthropic.claude-opus-4-6-v1"));
 
@@ -727,13 +728,13 @@ mod tests {
         let result = run_wizard_inner(&config, dest_dir.path(), &mut reader, &mut output).unwrap();
         assert!(result.is_none());
 
-        // config.toml should exist (default)
-        assert!(dest_dir.path().join("config.toml").exists());
+        // init.lua should exist (default)
+        assert!(dest_dir.path().join("init.lua").exists());
         // .env and permissions.toml should NOT exist
         assert!(!dest_dir.path().join(".env").exists());
         assert!(!dest_dir.path().join("permissions.toml").exists());
 
-        let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
+        let config_content = fs::read_to_string(dest_dir.path().join("init.lua")).unwrap();
         assert!(config_content.contains("maki configuration"));
         assert!(!config_content.contains("always_yolo"));
     }
@@ -770,7 +771,7 @@ mod tests {
             Some("anthropic/claude-sonnet-4-5-20250514")
         );
 
-        let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
+        let config_content = fs::read_to_string(dest_dir.path().join("init.lua")).unwrap();
         assert!(config_content.contains("anthropic/claude-sonnet-4-5-20250514"));
         assert!(!config_content.contains("always_yolo"));
 
@@ -805,7 +806,7 @@ mod tests {
             Some("anthropic/claude-sonnet-4-5-20250514")
         );
 
-        let config_content = fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
+        let config_content = fs::read_to_string(dest_dir.path().join("init.lua")).unwrap();
         assert!(config_content.contains("anthropic/claude-sonnet-4-5-20250514"));
         assert!(!config_content.contains("always_yolo"));
     }
@@ -815,8 +816,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dest = dir.path().join("maki-test");
         write_default_config(&dest).unwrap();
-        assert!(dest.join("config.toml").exists());
-        let content = fs::read_to_string(dest.join("config.toml")).unwrap();
+        assert!(dest.join("init.lua").exists());
+        let content = fs::read_to_string(dest.join("init.lua")).unwrap();
         assert!(content.contains("maki configuration"));
     }
 
@@ -992,9 +993,9 @@ mod tests {
 
         // Verify config.toml
         let config_content =
-            fs::read_to_string(dest_dir.path().join("config.toml")).unwrap();
+            fs::read_to_string(dest_dir.path().join("init.lua")).unwrap();
         assert!(config_content.contains("always_yolo = true"));
-        assert!(config_content.contains(r#"default_model = "bedrock/us.anthropic.claude-opus-4-6-v1""#));
+        assert!(config_content.contains("bedrock/us.anthropic.claude-opus-4-6-v1"));
 
         // Verify .env is parseable by dotenvy and has correct value
         let parsed: HashMap<String, String> =

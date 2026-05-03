@@ -48,7 +48,9 @@ impl AgentError {
 
     pub fn is_model_invalid(&self) -> bool {
         matches!(self, Self::Api { status: 400, message }
-            if message.contains("model") || message.contains("Model"))
+            if (message.contains("model") || message.contains("Model"))
+                && (message.contains("invalid") || message.contains("Invalid")
+                    || message.contains("not found") || message.contains("does not exist")))
     }
 
     pub fn user_message(&self) -> String {
@@ -143,6 +145,7 @@ mod tests {
     #[test_case(400, "Model not found", true  ; "model_not_found")]
     #[test_case(400, "bad request", false ; "generic_bad_request")]
     #[test_case(401, "model access denied", false ; "wrong_status")]
+    #[test_case(400, "Invocation of model ID anthropic.claude-opus-4-6-v1 with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.", false ; "bedrock_on_demand_throughput")]
     fn api_model_invalid(status: u16, message: &str, expected: bool) {
         let err = AgentError::Api {
             status,
