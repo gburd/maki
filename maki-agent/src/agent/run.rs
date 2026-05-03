@@ -22,6 +22,7 @@ use crate::{
 use maki_config::ToolOutputLines;
 
 const MAX_REAUTH_ATTEMPTS: u32 = 2;
+const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 
 enum TurnOutcome {
     Continue,
@@ -74,6 +75,7 @@ pub struct Agent {
     config: AgentConfig,
     tool_output_lines: ToolOutputLines,
     reauth_attempts: u32,
+    consecutive_timeouts: u32,
     permissions: Arc<PermissionManager>,
     thinking: ThinkingConfig,
     session_id: Option<String>,
@@ -89,7 +91,6 @@ impl Agent {
             provider: params.provider,
             model: Arc::new(params.model),
             fallback_models,
-            skills: params.skills,
             config: params.config,
             tool_output_lines: params.tool_output_lines,
             permissions: params.permissions,
@@ -110,6 +111,7 @@ impl Agent {
             rollback_len: 0,
             mcp: None,
             reauth_attempts: 0,
+            consecutive_timeouts: 0,
             thinking: ThinkingConfig::Off,
             session_id: params.session_id,
             file_tracker: params.file_tracker,
@@ -209,10 +211,28 @@ impl Agent {
         {
             Ok(r) => {
                 self.reauth_attempts = 0;
+                self.consecutive_timeouts = 0;
                 r
             }
             Err(e) if e.is_auth_error() => {
                 return self.wait_for_reauth(e).await;
+            }
+            Err(e) if matches!(e, AgentError::Timeout { .. }) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                    error!(
+                        consecutive = self.consecutive_timeouts,
+                        model = %self.model.id,
+                        "repeated stream timeouts, giving up"
+                    );
+                    return Err(e);
+                }
+                warn!(
+                    consecutive = self.consecutive_timeouts,
+                    model = %self.model.id,
+                    "stream timeout, retrying turn"
+                );
+                return Ok(TurnOutcome::Continue);
             }
             Err(e) if e.is_model_invalid() && !self.fallback_models.is_empty() => {
                 let next = self.fallback_models.remove(0);
