@@ -255,6 +255,12 @@ pub(crate) async fn stream_with_retry(
                 return Ok(r);
             }
             Err(AgentError::Cancelled) => return Err(StreamError::Cancelled { streamed }),
+            Err(e) if matches!(e, AgentError::Timeout { .. }) => {
+                // Don't retry timeouts — they indicate the model stopped responding
+                // for the full idle window. turn() tracks consecutive_timeouts and
+                // retries with a fresh context, which is more useful than resending.
+                return Err(e.into());
+            }
             Err(e) => {
                 attempt += 1;
                 emit_api_error(model, &e, attempt, started.elapsed());

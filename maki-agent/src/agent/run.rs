@@ -67,6 +67,7 @@ const NO_FRAME: &str = "no prompt frame to send the request under";
 const MODEL_BINDING_MISMATCH: &str = "model_binding_mismatch";
 const THINKING_DROPPED: &str =
     "The prompt changed under earlier reasoning, so it was dropped to keep the session going.";
+const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 
 pub async fn resolve_compaction_model(
     provider: &Arc<dyn Provider>,
@@ -164,6 +165,7 @@ pub struct Agent<'h> {
     reauth: bool,
     reauth_attempts: u32,
     overflow_recoveries: u32,
+    consecutive_timeouts: u32,
     permissions: Arc<PermissionManager>,
     opts: RequestOptions,
     session_id: Option<SessionRef>,
@@ -212,6 +214,7 @@ impl<'h> Agent<'h> {
             reauth: false,
             reauth_attempts: 0,
             overflow_recoveries: 0,
+            consecutive_timeouts: 0,
             opts: RequestOptions::default(),
             session_id: params.session_id,
             background_for: params.background_for,
@@ -554,6 +557,7 @@ impl<'h> Agent<'h> {
             Ok(r) => {
                 self.reauth_attempts = 0;
                 self.overflow_recoveries = 0;
+                self.consecutive_timeouts = 0;
                 r
             }
             Err(StreamError::Cancelled { streamed }) => {
@@ -577,6 +581,23 @@ impl<'h> Agent<'h> {
             }
             Err(StreamError::Other(e)) if e.is_thinking_unbound() => {
                 return self.recover_unbound_thinking(e);
+            }
+            Err(StreamError::Other(e)) if matches!(e, AgentError::Timeout { .. }) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                    error!(
+                        consecutive = self.consecutive_timeouts,
+                        model = %self.model.id,
+                        "repeated stream timeouts, giving up"
+                    );
+                    return Err(e);
+                }
+                warn!(
+                    consecutive = self.consecutive_timeouts,
+                    model = %self.model.id,
+                    "stream timeout, retrying turn"
+                );
+                return Ok(TurnOutcome::Continue);
             }
             Err(StreamError::Other(e)) => {
                 error!(error = %e, model = %self.model.id, self.num_turns, "stream_message failed");
@@ -604,6 +625,14 @@ impl<'h> Agent<'h> {
         self.emit_turn_complete(&response)?;
 
         if has_tools {
+            if stop_reason == Some(StopReason::MaxTokens) {
+                warn!(
+                    self.num_turns,
+                    "response truncated (max_tokens) with tool call, re-prompting without dispatching"
+                );
+                self.history.push(response.message);
+                return Ok(TurnOutcome::Continue);
+            }
             let history_len_before = self.history.len();
             self.process_tool_calls(response).await?;
             self.gauge
