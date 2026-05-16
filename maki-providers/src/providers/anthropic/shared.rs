@@ -353,8 +353,14 @@ impl EventParser {
                             v
                         }
                         Err(e) => {
-                            warn!(error = %e, json = %self.current_tool_json, "malformed tool JSON, falling back to {{}}");
-                            Value::Object(Default::default())
+                            warn!(error = %e, json = %self.current_tool_json, "malformed tool JSON");
+                            self.current_tool_json.clear();
+                            return Err(AgentError::api(
+                                400,
+                                format!(
+                                    "tool '{name}' received malformed JSON arguments (response likely truncated): {e}"
+                                ),
+                            ));
                         }
                     };
                     self.current_tool_json.clear();

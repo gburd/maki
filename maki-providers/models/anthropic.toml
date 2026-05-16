@@ -2,7 +2,7 @@
 slug = "anthropic"
 
 [[model]]
-prefixes = ["claude-haiku-4-5"]
+prefixes = ["claude-haiku-4-5", "claude-haiku-4.5"]
 tier = "weak"
 family = "claude"
 vision = true
@@ -12,7 +12,7 @@ context_window = 200000
 pricing = { input = 1.0, output = 5.0, cache_write = 1.25, cache_read = 0.1 }
 
 [[model]]
-prefixes = ["claude-sonnet-4-5"]
+prefixes = ["claude-sonnet-4-5", "claude-sonnet-4.5"]
 tier = "medium"
 family = "claude"
 vision = true
