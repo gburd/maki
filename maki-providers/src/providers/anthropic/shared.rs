@@ -306,8 +306,15 @@ impl EventParser {
                             v
                         }
                         Err(e) => {
-                            warn!(error = %e, json = %self.current_tool_json, "malformed tool JSON, falling back to {{}}");
-                            Value::Object(Default::default())
+                            warn!(error = %e, json = %self.current_tool_json, "malformed tool JSON");
+                            self.current_tool_json.clear();
+                            return Err(AgentError::Api {
+                                status: 400,
+                                message: format!(
+                                    "tool '{}' received malformed JSON arguments (response likely truncated): {e}",
+                                    name
+                                ),
+                            });
                         }
                     };
                     self.current_tool_json.clear();
@@ -360,7 +367,7 @@ impl EventParser {
 pub(crate) fn models() -> &'static [ModelEntry] {
     &[
         ModelEntry {
-            prefixes: &["claude-haiku-4-5"],
+            prefixes: &["claude-haiku-4-5", "claude-haiku-4.5"],
             tier: ModelTier::Weak,
             family: ModelFamily::Claude,
             default: true,
@@ -375,7 +382,7 @@ pub(crate) fn models() -> &'static [ModelEntry] {
             fast_capable: false,
         },
         ModelEntry {
-            prefixes: &["claude-sonnet-4-5"],
+            prefixes: &["claude-sonnet-4-5", "claude-sonnet-4.5"],
             tier: ModelTier::Medium,
             family: ModelFamily::Claude,
             default: false,
