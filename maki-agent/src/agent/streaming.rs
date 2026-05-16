@@ -1,5 +1,5 @@
 use maki_providers::provider::Provider;
-use maki_providers::retry::{MAX_TIMEOUT_RETRIES, RetryState};
+use maki_providers::retry::RetryState;
 use maki_providers::{Message, Model, ProviderEvent, RequestOptions, StreamResponse};
 use serde_json::Value;
 use tracing::warn;
@@ -52,6 +52,12 @@ pub(crate) async fn stream_with_retry(
         match result {
             Ok(r) => return Ok(r),
             Err(AgentError::Cancelled) => return Err(AgentError::Cancelled),
+            Err(e) if matches!(e, AgentError::Timeout { .. }) => {
+                // Don't retry timeouts — they indicate the model stopped responding
+                // for the full idle window. turn() tracks consecutive_timeouts and
+                // retries with a fresh context, which is more useful than resending.
+                return Err(e);
+            }
             Err(e) if e.is_retryable() => {
                 if e.should_rotate_key()
                     && let Ok(true) = provider.rotate_key().await
@@ -59,9 +65,6 @@ pub(crate) async fn stream_with_retry(
                     warn!("rotated API key after error: {e}");
                 }
                 let (attempt, delay) = retry.next_delay();
-                if matches!(e, AgentError::Timeout { .. }) && attempt > MAX_TIMEOUT_RETRIES {
-                    return Err(e);
-                }
                 let delay_ms = delay.as_millis() as u64;
                 warn!(attempt, delay_ms, error = %e, "retryable, will retry");
                 event_tx.send(AgentEvent::Retry {
