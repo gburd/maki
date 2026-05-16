@@ -1683,7 +1683,7 @@ data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":5}}\n";
     }
 
     #[tokio::test]
-    async fn parse_sse_malformed_tool_json_yields_empty_object() {
+    async fn parse_sse_malformed_tool_json_returns_error() {
         let sse_data = "\
 event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1}}}\n\
@@ -1701,14 +1701,14 @@ event: message_delta\n\
 data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":1}}\n";
 
         let (tx, _rx) = flume::unbounded();
-        let resp = parse_sse(Cursor::new(sse_data.as_bytes()), &tx, TEST_STREAM_TIMEOUT)
+        let err = parse_sse(Cursor::new(sse_data.as_bytes()), &tx, TEST_STREAM_TIMEOUT)
             .await
-            .unwrap();
+            .unwrap_err();
 
-        let tools: Vec<_> = resp.message.tool_uses().collect();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].1, "read");
-        assert_eq!(*tools[0].2, Value::Object(Default::default()));
+        assert!(
+            matches!(err, AgentError::Api { status: 400, ref message, .. } if message.contains("read")),
+            "expected 400 error mentioning tool name, got: {err:?}"
+        );
     }
 
     #[tokio::test]
