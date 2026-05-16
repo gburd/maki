@@ -22,6 +22,7 @@ use crate::{
 use maki_config::ToolOutputLines;
 
 const MAX_REAUTH_ATTEMPTS: u32 = 2;
+const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 
 enum TurnOutcome {
     Continue,
@@ -72,6 +73,7 @@ pub struct Agent {
     config: AgentConfig,
     tool_output_lines: ToolOutputLines,
     reauth_attempts: u32,
+    consecutive_timeouts: u32,
     permissions: Arc<PermissionManager>,
     thinking: ThinkingConfig,
     session_id: Option<String>,
@@ -104,6 +106,7 @@ impl Agent {
             rollback_len: 0,
             mcp: None,
             reauth_attempts: 0,
+            consecutive_timeouts: 0,
             thinking: ThinkingConfig::Off,
             session_id: params.session_id,
             file_tracker: params.file_tracker,
@@ -195,10 +198,28 @@ impl Agent {
         {
             Ok(r) => {
                 self.reauth_attempts = 0;
+                self.consecutive_timeouts = 0;
                 r
             }
             Err(e) if e.is_auth_error() => {
                 return self.wait_for_reauth(e).await;
+            }
+            Err(e) if matches!(e, AgentError::Timeout { .. }) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                    error!(
+                        consecutive = self.consecutive_timeouts,
+                        model = %self.model.id,
+                        "repeated stream timeouts, giving up"
+                    );
+                    return Err(e);
+                }
+                warn!(
+                    consecutive = self.consecutive_timeouts,
+                    model = %self.model.id,
+                    "stream timeout, retrying turn"
+                );
+                return Ok(TurnOutcome::Continue);
             }
             Err(e) => {
                 error!(error = %e, model = %self.model.id, self.num_turns, "stream_message failed");
@@ -226,6 +247,14 @@ impl Agent {
         self.total_usage += usage;
 
         if has_tools {
+            if stop_reason == Some(StopReason::MaxTokens) {
+                warn!(
+                    self.num_turns,
+                    "response truncated (max_tokens) with tool call, re-prompting without dispatching"
+                );
+                self.history.push(response.message);
+                return Ok(TurnOutcome::Continue);
+            }
             self.process_tool_calls(response).await?;
         } else {
             self.history.push(response.message);
