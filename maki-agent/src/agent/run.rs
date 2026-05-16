@@ -26,6 +26,7 @@ use maki_storage::id::SessionRef;
 
 const MAX_REAUTH_ATTEMPTS: u32 = 2;
 const NUDGE_PROMPT: &str = "You just executed tool calls but returned an empty response. Please process the tool results above and continue with the task.";
+const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 
 pub fn resolve_compaction_model(
     provider: &Arc<dyn Provider>,
@@ -95,6 +96,7 @@ pub struct Agent<'h> {
     tool_output_lines: ToolOutputLines,
     reauth_attempts: u32,
     post_tool_empty_retried: bool,
+    consecutive_timeouts: u32,
     permissions: Arc<PermissionManager>,
     opts: RequestOptions,
     session_id: Option<SessionRef>,
@@ -135,6 +137,7 @@ impl<'h> Agent<'h> {
             mcp: None,
             reauth_attempts: 0,
             post_tool_empty_retried: false,
+            consecutive_timeouts: 0,
             opts: RequestOptions::default(),
             session_id: params.session_id,
             file_tracker: params.file_tracker,
@@ -244,10 +247,28 @@ impl<'h> Agent<'h> {
         {
             Ok(r) => {
                 self.reauth_attempts = 0;
+                self.consecutive_timeouts = 0;
                 r
             }
             Err(e) if e.is_auth_error() => {
                 return self.wait_for_reauth(e).await;
+            }
+            Err(e) if matches!(e, AgentError::Timeout { .. }) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                    error!(
+                        consecutive = self.consecutive_timeouts,
+                        model = %self.model.id,
+                        "repeated stream timeouts, giving up"
+                    );
+                    return Err(e);
+                }
+                warn!(
+                    consecutive = self.consecutive_timeouts,
+                    model = %self.model.id,
+                    "stream timeout, retrying turn"
+                );
+                return Ok(TurnOutcome::Continue);
             }
             Err(e) => {
                 error!(error = %e, model = %self.model.id, self.num_turns, "stream_message failed");
@@ -276,6 +297,14 @@ impl<'h> Agent<'h> {
         self.context_size = usage.total_input();
 
         if has_tools {
+            if stop_reason == Some(StopReason::MaxTokens) {
+                warn!(
+                    self.num_turns,
+                    "response truncated (max_tokens) with tool call, re-prompting without dispatching"
+                );
+                self.history.push(response.message);
+                return Ok(TurnOutcome::Continue);
+            }
             let history_len_before = self.history.len();
             self.process_tool_calls(response).await?;
             self.context_size +=
