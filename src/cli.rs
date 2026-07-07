@@ -46,11 +46,11 @@ pub struct Cli {
     pub verbose: bool,
 
     /// Resume the most recent session in this directory
-    #[arg(short = 'c', long = "continue")]
+    #[arg(short = 'c', long = "continue", visible_alias = "resume")]
     pub continue_session: bool,
 
     /// Resume a specific session by its ID
-    #[arg(short = 's', long, alias = "resume")]
+    #[arg(short = 's', long)]
     pub session: Option<String>,
 
     /// Output format for --print mode
