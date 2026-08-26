@@ -26,6 +26,7 @@ Type `/` in the input box to open the command palette.
 | `/cd` | Change working directory |
 | `/btw` | Ask a quick question (no tools, no history pollution) |
 | `/yolo` | Toggle YOLO mode (skip all permission prompts) |
+| `/sandbox` | Toggle sandbox mode (restrict bash filesystem writes and network) |
 | `/fast` | Toggle fast mode (Anthropic Opus or Codex subscription models) |
 | `/workflow` | Toggle workflow mode (task callable inside code_execution) |
 | `/exit` | Exit the application |
@@ -127,7 +128,7 @@ Aliasing adds a name, so both stay in the palette. Any command works as a target
 - Needs `session_write`, `session_settings`: `/rename`, `/sessions`.
 - Needs `session_settings`: `/model`, `/cd`, `/fast`, `/workflow`, `/thinking`.
 - Needs what its owner holds: every other plugin command, as described below.
-- Only when you type it: `/yolo`, `/trust`, `/packupdate`, `/packdel`. These change permissions, folder trust, or installed packages.
+- Only when you type it: `/yolo`, `/sandbox`, `/trust`, `/packupdate`, `/packdel`. These change permissions, folder trust, or installed packages.
 
 A plugin command's handler runs with the grants of the plugin that registered it. The caller picks the arguments, so it must hold at least the same reach:
 
