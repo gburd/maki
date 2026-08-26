@@ -1812,6 +1812,16 @@ impl App {
                 self.flash(msg.into());
                 vec![]
             }
+            "/sandbox" => {
+                let enabled = maki_lua::sandbox::toggle();
+                let msg = if enabled {
+                    "Sandbox mode enabled (bash restricted to workdir, no network)"
+                } else {
+                    "Sandbox mode disabled"
+                };
+                self.flash(msg.into());
+                vec![]
+            }
             "/fast" => {
                 match self.set_fast(!self.state.fast_intent()) {
                     Ok(()) => self.flash(

@@ -9,6 +9,7 @@ mod loader;
 mod pack;
 pub(crate) mod plugin_permissions;
 mod runtime;
+pub mod sandbox;
 pub mod session_snapshot;
 
 pub use api::keymap::{

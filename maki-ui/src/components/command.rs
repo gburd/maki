@@ -100,6 +100,12 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         bang: false,
     },
     BuiltinCommand {
+        name: "/sandbox",
+        description: "Toggle sandbox mode (restrict bash filesystem writes and network)",
+        max_args: 0,
+        bang: false,
+    },
+    BuiltinCommand {
         name: "/fast",
         description: "Toggle fast mode (Anthropic Opus or Codex subscription models)",
         max_args: 0,
