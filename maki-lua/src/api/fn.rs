@@ -70,7 +70,21 @@ impl JobStore {
         on_stderr: Option<RegistryKey>,
         on_exit: Option<RegistryKey>,
     ) -> Result<u32, String> {
-        let mut command = shell_command(cmd);
+        let resolved_cwd = match cwd.as_deref().map(expand_tilde) {
+            Some(dir) => {
+                if !dir.is_dir() {
+                    return Err(format!("cwd is not a directory: {}", dir.display()));
+                }
+                Some(dir)
+            }
+            None => None,
+        };
+        let sandbox_cwd = resolved_cwd
+            .clone()
+            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()));
+
+        let mut command =
+            crate::sandbox::wrap_command(cmd, &sandbox_cwd).unwrap_or_else(|| shell_command(cmd));
         command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -88,10 +102,7 @@ impl JobStore {
             }
         }
 
-        if let Some(dir) = cwd.as_deref().map(expand_tilde) {
-            if !dir.is_dir() {
-                return Err(format!("cwd is not a directory: {}", dir.display()));
-            }
+        if let Some(dir) = resolved_cwd {
             command.current_dir(dir);
         }
         if let Some(ref env_map) = env {

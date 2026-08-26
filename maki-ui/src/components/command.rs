@@ -85,6 +85,11 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         max_args: 0,
     },
     BuiltinCommand {
+        name: "/sandbox",
+        description: "Toggle sandbox mode (restrict bash filesystem writes and network)",
+        max_args: 0,
+    },
+    BuiltinCommand {
         name: "/thinking",
         description: "Toggle extended thinking (off, adaptive, effort level, or budget)",
         max_args: 1,

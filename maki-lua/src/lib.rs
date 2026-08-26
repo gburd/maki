@@ -6,6 +6,7 @@ pub mod language;
 mod loader;
 pub(crate) mod plugin_permissions;
 mod runtime;
+pub mod sandbox;
 
 pub use api::keymap::{KeymapEntry, KeymapReader, KeymapSnapshot};
 pub use api::options::{OptionSpec, OptionType, PluginOptionSpecs};

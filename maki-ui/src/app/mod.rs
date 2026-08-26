@@ -1365,6 +1365,16 @@ impl App {
                 self.flash(msg.into());
                 vec![]
             }
+            "/sandbox" => {
+                let enabled = maki_lua::sandbox::toggle();
+                let msg = if enabled {
+                    "Sandbox mode enabled (bash restricted to workdir, no network)"
+                } else {
+                    "Sandbox mode disabled"
+                };
+                self.flash(msg.into());
+                vec![]
+            }
             "/thinking" => {
                 match self.set_thinking(&cmd.args) {
                     Ok(thinking) => self.flash(format!("Thinking: {thinking}")),
