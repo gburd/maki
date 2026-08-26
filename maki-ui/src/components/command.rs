@@ -163,6 +163,13 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         plugin_access: PluginAccess::UserOnly,
     },
     BuiltinCommand {
+        name: "/sandbox",
+        description: "Toggle sandbox mode (restrict bash filesystem writes and network)",
+        max_args: 0,
+        bang: false,
+        plugin_access: PluginAccess::UserOnly,
+    },
+    BuiltinCommand {
         name: "/fast",
         description: "Toggle fast mode (Anthropic Opus or Codex subscription models)",
         max_args: 0,
