@@ -25,6 +25,7 @@ Type `/` in the input box to open the command palette.
 | `/cd` | Change working directory |
 | `/btw` | Ask a quick question (no tools, no history pollution) |
 | `/yolo` | Toggle YOLO mode (skip all permission prompts) |
+| `/sandbox` | Toggle sandbox mode (restrict bash filesystem writes and network) |
 | `/thinking` | Toggle extended thinking (off, adaptive, effort level, or budget) |
 | `/fast` | Toggle Anthropic fast mode (Opus only) |
 | `/workflow` | Toggle workflow mode (task callable inside code_execution) |
