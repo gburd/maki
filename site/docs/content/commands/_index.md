@@ -25,6 +25,7 @@ Type `/` in the input box to open the command palette.
 | `/cd` | Change working directory |
 | `/btw` | Ask a quick question (no tools, no history pollution) |
 | `/yolo` | Toggle YOLO mode (skip all permission prompts) |
+| `/sandbox` | Toggle sandbox mode (restrict bash filesystem writes and network) |
 | `/fast` | Toggle fast mode (Anthropic Opus or Codex subscription models) |
 | `/workflow` | Toggle workflow mode (task callable inside code_execution) |
 | `/exit` | Exit the application |
