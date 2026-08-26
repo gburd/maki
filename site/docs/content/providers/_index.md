@@ -46,8 +46,8 @@ The built-in provider still owns the slug, so `protocol`, `api_key_env`, `discov
 
 | Tier | Models | Pricing (in/out per 1M tokens) | Context |
 |------|--------|-------------------------------|---------|
-| Weak | **claude-haiku-4-5** (default) | $1.00 / $5.00 | 200K ctx / 64K out |
-| Medium | claude-sonnet-4-5 | $3.00 / $15.00 | 200K ctx / 64K out |
+| Weak | **claude-haiku-4-5, claude-haiku-4.5** (default) | $1.00 / $5.00 | 200K ctx / 64K out |
+| Medium | claude-sonnet-4-5, claude-sonnet-4.5 | $3.00 / $15.00 | 200K ctx / 64K out |
 | Medium | claude-sonnet-4-6 | $3.00 / $15.00 | 200K ctx / 64K out |
 | Medium | **claude-sonnet-5** (default) | $2.00 / $10.00 | 200K ctx / 128K out |
 | Medium | claude-sonnet-4 | $3.00 / $15.00 | 200K ctx / 64K out |
