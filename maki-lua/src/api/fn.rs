@@ -70,14 +70,16 @@ impl From<&str> for JobCommand {
 }
 
 impl JobCommand {
-    fn build(&self) -> Command {
+    fn build(&self, sandbox_cwd: &Path) -> Command {
         match self {
-            Self::Shell(cmd) => shell_command(cmd),
-            Self::Argv(argv) => {
+            Self::Shell(cmd) => {
+                crate::sandbox::wrap_shell(cmd, sandbox_cwd).unwrap_or_else(|| shell_command(cmd))
+            }
+            Self::Argv(argv) => crate::sandbox::wrap_argv(argv, sandbox_cwd).unwrap_or_else(|| {
                 let mut command = Command::new(&argv[0]);
                 command.args(&argv[1..]);
                 command
-            }
+            }),
         }
     }
 
@@ -279,7 +281,19 @@ impl JobStore {
             on_stderr,
             on_exit,
         } = spec;
-        let mut command = cmd.build();
+        let resolved_cwd = match cwd.as_deref().map(expand_tilde) {
+            Some(dir) => {
+                if !dir.is_dir() {
+                    return Err(format!("cwd is not a directory: {}", dir.display()));
+                }
+                Some(dir)
+            }
+            None => None,
+        };
+        let sandbox_cwd = resolved_cwd
+            .clone()
+            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()));
+        let mut command = cmd.build(&sandbox_cwd);
         command
             .stdout(stdout.stdio()?)
             .stderr(stderr.stdio()?)
@@ -297,10 +311,7 @@ impl JobStore {
             }
         }
 
-        if let Some(dir) = cwd.as_deref().map(expand_tilde) {
-            if !dir.is_dir() {
-                return Err(format!("cwd is not a directory: {}", dir.display()));
-            }
+        if let Some(dir) = resolved_cwd {
             command.current_dir(dir);
         }
         if let Some(ref env_map) = env {
