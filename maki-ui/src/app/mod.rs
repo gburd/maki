@@ -19,7 +19,7 @@ pub(crate) mod view;
 
 use std::collections::HashMap;
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -441,7 +441,7 @@ impl App {
         let typewriter = ui_config.typewriter_ms_per_char;
         let flash = ui_config.flash_duration();
         let input_box = InputBox::new(
-            InputHistory::load(&storage, input_history_size),
+            InputHistory::load(&storage, Path::new(&state.session.cwd), input_history_size),
             ui_config.max_input_lines,
         );
         let mut app = Self {

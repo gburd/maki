@@ -1,15 +1,43 @@
 use std::collections::VecDeque;
+use std::fmt::Write as _;
 use std::fs;
+use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
+use crate::paths::canonical_key;
 use crate::{StateDir, StorageError, atomic_write};
 
-const HISTORY_FILE: &str = "input_history.json";
+const HISTORY_DIR: &str = "input_history";
+const KEY_BYTES: usize = 8;
 pub const MAX_ENTRIES: usize = 100;
+
+/// Recalling a prompt written for an unrelated checkout is noise, so every
+/// working directory gets its own history file under [`HISTORY_DIR`].
+///
+/// The name is a digest of the canonical directory rather than the path
+/// itself, which keeps it short and free of separators on every platform.
+/// Two spellings of one directory (through a symlink, through `~`) land on
+/// the same file because [`canonical_key`] resolves them first, matching how
+/// sessions already key their cwd index.
+fn history_path(dir: &StateDir, cwd: &Path) -> PathBuf {
+    let digest = Sha256::digest(canonical_key(cwd).as_os_str().as_encoded_bytes());
+    let mut name = String::with_capacity(KEY_BYTES * 2);
+    for byte in &digest[..KEY_BYTES] {
+        let _ = write!(name, "{byte:02x}");
+    }
+    name.push_str(".json");
+    dir.path().join(HISTORY_DIR).join(name)
+}
 
 #[derive(Debug)]
 pub struct InputHistory {
     entries: VecDeque<String>,
     max_entries: usize,
+    /// Where [`Self::save`] writes, fixed at load time. A session that
+    /// `/cd`s elsewhere keeps writing to the project it was recalled from,
+    /// so the prompts typed here can never overwrite another project's file.
+    file: Option<PathBuf>,
 }
 
 impl Default for InputHistory {
@@ -17,36 +45,39 @@ impl Default for InputHistory {
         Self {
             entries: VecDeque::new(),
             max_entries: MAX_ENTRIES,
+            file: None,
         }
     }
 }
 
 impl InputHistory {
-    pub fn load(dir: &StateDir, max_entries: usize) -> Self {
-        let path = dir.path().join(HISTORY_FILE);
-        let data = match fs::read(&path) {
-            Ok(d) => d,
-            Err(_) => {
-                return Self {
-                    entries: VecDeque::new(),
-                    max_entries,
-                };
-            }
-        };
-        let items: Vec<String> = serde_json::from_slice(&data).unwrap_or_default();
+    pub fn load(dir: &StateDir, cwd: &Path, max_entries: usize) -> Self {
+        let file = history_path(dir, cwd);
         let mut history = Self {
             entries: VecDeque::with_capacity(max_entries),
             max_entries,
+            file: Some(file),
         };
+        let Some(data) = history.file.as_ref().and_then(|p| fs::read(p).ok()) else {
+            return history;
+        };
+        let items: Vec<String> = serde_json::from_slice(&data).unwrap_or_default();
         for entry in items {
             history.push_inner(entry);
         }
         history
     }
 
-    pub fn save(&self, dir: &StateDir) -> Result<(), StorageError> {
-        let data = serde_json::to_vec(&self.entries)?;
-        atomic_write(&dir.path().join(HISTORY_FILE), &data)
+    /// A history with no file behind it (the [`Default`] one tests build) has
+    /// nowhere to go, so saving it is a no-op rather than an error.
+    pub fn save(&self) -> Result<(), StorageError> {
+        let Some(file) = &self.file else {
+            return Ok(());
+        };
+        if let Some(parent) = file.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        atomic_write(file, &serde_json::to_vec(&self.entries)?)
     }
 
     pub fn push(&mut self, entry: String) {
@@ -83,26 +114,100 @@ impl InputHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
     use test_case::test_case;
 
-    fn tmp_dir() -> (tempfile::TempDir, StateDir) {
+    const STATE_SUBDIR: &str = "state";
+
+    fn tmp_dir() -> (TempDir, StateDir) {
         let tmp = tempfile::tempdir().unwrap();
-        let dir = StateDir::from_path(tmp.path().to_path_buf());
+        let dir = StateDir::from_path(tmp.path().join(STATE_SUBDIR));
         (tmp, dir)
+    }
+
+    fn project(tmp: &TempDir, name: &str) -> PathBuf {
+        let path = tmp.path().join(name);
+        fs::create_dir_all(&path).unwrap();
+        path
     }
 
     #[test]
     fn roundtrip() {
-        let (_tmp, dir) = tmp_dir();
-        let mut history = InputHistory::load(&dir, MAX_ENTRIES);
+        let (tmp, dir) = tmp_dir();
+        let cwd = project(&tmp, "one");
+        let mut history = InputHistory::load(&dir, &cwd, MAX_ENTRIES);
         history.push("a".into());
         history.push("b".into());
         history.push("c".into());
-        history.save(&dir).unwrap();
-        let loaded = InputHistory::load(&dir, MAX_ENTRIES);
+        history.save().unwrap();
+        let loaded = InputHistory::load(&dir, &cwd, MAX_ENTRIES);
         assert_eq!(loaded.len(), 3);
         assert_eq!(loaded.get(0), Some("a"));
         assert_eq!(loaded.get(2), Some("c"));
+    }
+
+    #[test]
+    fn each_project_keeps_its_own_entries() {
+        let (tmp, dir) = tmp_dir();
+        let (one, two) = (project(&tmp, "one"), project(&tmp, "two"));
+
+        let mut first = InputHistory::load(&dir, &one, MAX_ENTRIES);
+        first.push("in one".into());
+        first.save().unwrap();
+
+        let mut second = InputHistory::load(&dir, &two, MAX_ENTRIES);
+        assert!(second.is_empty());
+        second.push("in two".into());
+        second.save().unwrap();
+
+        assert_eq!(
+            InputHistory::load(&dir, &one, MAX_ENTRIES).get(0),
+            Some("in one")
+        );
+        assert_eq!(
+            InputHistory::load(&dir, &two, MAX_ENTRIES).get(0),
+            Some("in two")
+        );
+    }
+
+    /// Whichever way a directory is spelled, it is one project.
+    #[test]
+    fn an_unnormalized_cwd_reaches_the_same_history() {
+        let (tmp, dir) = tmp_dir();
+        let cwd = project(&tmp, "one");
+
+        let mut history = InputHistory::load(&dir, &cwd, MAX_ENTRIES);
+        history.push("a".into());
+        history.save().unwrap();
+
+        let detour = cwd.join("nested").join("..");
+        assert_eq!(
+            InputHistory::load(&dir, &detour, MAX_ENTRIES).get(0),
+            Some("a")
+        );
+    }
+
+    #[test]
+    fn a_saved_project_history_stays_capped() {
+        const MAX: usize = 3;
+
+        let (tmp, dir) = tmp_dir();
+        let cwd = project(&tmp, "one");
+        let mut history = InputHistory::load(&dir, &cwd, MAX);
+        for i in 0..MAX * 2 {
+            history.push(format!("entry{i}"));
+        }
+        history.save().unwrap();
+
+        let loaded = InputHistory::load(&dir, &cwd, MAX);
+        assert_eq!(loaded.len(), MAX);
+        assert_eq!(loaded.get(0), Some("entry3"));
+    }
+
+    #[test]
+    fn a_history_with_no_file_saves_nowhere() {
+        let history = InputHistory::default();
+        history.save().unwrap();
     }
 
     #[test]
@@ -145,11 +250,14 @@ mod tests {
     #[test_case(None      ; "missing_file")]
     #[test_case(Some(b"not json" as &[u8]) ; "corrupt_file")]
     fn load_bad_state_returns_empty(content: Option<&[u8]>) {
-        let (_tmp, dir) = tmp_dir();
+        let (tmp, dir) = tmp_dir();
+        let cwd = project(&tmp, "one");
         if let Some(data) = content {
-            fs::write(dir.path().join(HISTORY_FILE), data).unwrap();
+            let path = history_path(&dir, &cwd);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, data).unwrap();
         }
-        let history = InputHistory::load(&dir, MAX_ENTRIES);
+        let history = InputHistory::load(&dir, &cwd, MAX_ENTRIES);
         assert!(history.is_empty());
     }
 }
