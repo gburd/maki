@@ -19,6 +19,7 @@ workspace = true
 maki-ui = { workspace = true }
 maki-agent = { workspace = true }
 maki-acp = { workspace = true }
+maki-cedar = { workspace = true }
 maki-config = { workspace = true }
 maki-providers = { workspace = true }
 maki-storage = { workspace = true }
@@ -51,6 +52,7 @@ test-case = { workspace = true }
 members = [
   "maki-acp",
   "maki-agent",
+  "maki-cedar",
   "maki-config",
   "maki-config-macro",
   "maki-docgen",
@@ -80,6 +82,7 @@ rust-version = "1.99"
 [workspace.dependencies]
 maki-agent = { path = "maki-agent" }
 maki-acp = { path = "maki-acp" }
+maki-cedar = { path = "maki-cedar" }
 maki-config = { path = "maki-config" }
 maki-interpreter = { path = "maki-interpreter" }
 maki-providers = { path = "maki-providers" }
@@ -102,6 +105,7 @@ crossterm = { version = "0.29", features = ["osc52"] }
 color-eyre = { version = "0.6", default-features = false, features = ["track-caller"] }
 termini = "1"
 thiserror = "2"
+cedar-policy = "4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "env-filter", "json"] }
 clap = { version = "4", features = ["derive"] }
@@ -203,7 +207,9 @@ monty = "1"
 monty-types = "1"
 notify = { version = "9.0.0-rc.5", default-features = false, features = ["flume", "macos_fsevent"] }
 notify-rust = "4.18.1"
-serde_yaml = "0.9"
+serde-saphyr = { version = "2", default-features = false }
+serde-value = "0.7"
+indexmap = { version = "2", features = ["serde"] }
 shell-words = "1"
 agent-client-protocol-schema = "1.10"
 wait-timeout = "0.2"
@@ -223,6 +229,11 @@ debug = false
 # grammars. Those static archives held the bulk of the bytes.
 [profile.dev.build-override]
 debug = false
+
+# Fat LTO makes the UI hot paths about 8% faster and the binary 8% smaller. Only
+# release builds pay for it, about 2.5 minutes on an M3 Pro.
+[profile.release]
+lto = true
 
 # crossterm 0.29.0 has no VT input on Windows, so bracketed paste never decodes and a
 # multiline paste submits at the first newline (#336). Pinned to the head of
