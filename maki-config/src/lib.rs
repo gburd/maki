@@ -1118,6 +1118,7 @@ fn parse_cedar_settings(value: &toml::Value) -> Option<CedarSettings> {
             .and_then(toml::Value::as_integer)
             .filter(|n| *n >= 0)
             .unwrap_or(0) as u64,
+        agent_token_file: string("agent_token_file").map(PathBuf::from),
     })
 }
 
@@ -1341,6 +1342,9 @@ pub struct CedarSettings {
     /// How often to re-fetch policies from `agent_url`, in seconds. 0 disables
     /// periodic refresh (fetch once at startup).
     pub sync_interval_secs: u64,
+    /// A file holding a token sent as `Authorization: Bearer <token>` to
+    /// `agent_url`, for a store that gates reads.
+    pub agent_token_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default)]

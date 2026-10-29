@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use cedar_policy::{
-    Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request, Response,
+    Authorizer, Context, Decision, Entities, Entity, EntityUid, PolicySet, Request, Response,
     RestrictedExpression, Schema,
 };
 
@@ -15,7 +15,6 @@ use crate::{ACTION, CTX_SCOPE, CTX_TOOL, CedarError, PRINCIPAL, TOOL_TYPE};
 pub struct CedarEngine {
     authorizer: Authorizer,
     policies: PolicySet,
-    entities: Entities,
     principal: EntityUid,
     action: EntityUid,
     schema: Option<Schema>,
@@ -33,8 +32,9 @@ impl CedarEngine {
     /// (human `.cedarschema` syntax). A schema is validated against but not
     /// required; without one, policies still evaluate.
     pub fn from_source(policies: &str, schema: Option<&str>) -> Result<Self, CedarError> {
+        let policies = expand_home_in_like(policies);
         let policies =
-            PolicySet::from_str(policies).map_err(|e| CedarError::Policies(e.to_string()))?;
+            PolicySet::from_str(&policies).map_err(|e| CedarError::Policies(e.to_string()))?;
         let schema = match schema {
             Some(src) => {
                 Some(Schema::from_str(src).map_err(|e| CedarError::Schema(e.to_string()))?)
@@ -47,7 +47,6 @@ impl CedarEngine {
         Ok(Self {
             authorizer: Authorizer::new(),
             policies,
-            entities: Entities::empty(),
             principal,
             action,
             schema,
@@ -81,9 +80,17 @@ impl CedarEngine {
             Err(e) => return CedarDecision::Deny(e.to_string()),
         };
 
+        // The schema gives every Tool a `name` (server-wide MCP rules match on
+        // `resource.name like "srv.*"`), so the request must carry the entity;
+        // with an empty entity set the attribute is missing and the policy
+        // silently never applies.
+        let entities = match self.tool_entity(tool_key) {
+            Ok(e) => e,
+            Err(e) => return CedarDecision::Deny(e.to_string()),
+        };
         let response = self
             .authorizer
-            .is_authorized(&request, &self.policies, &self.entities);
+            .is_authorized(&request, &self.policies, &entities);
         match response.decision() {
             Decision::Allow => CedarDecision::Allow,
             // Cedar is two-valued. An explicit forbid names the policy in the
@@ -104,6 +111,18 @@ impl CedarEngine {
         })
     }
 
+    fn tool_entity(&self, tool_key: &str) -> Result<Entities, CedarError> {
+        let uid = self.resource(tool_key)?;
+        let attrs = std::collections::HashMap::from([(
+            "name".to_string(),
+            RestrictedExpression::new_string(tool_key.to_string()),
+        )]);
+        let entity = Entity::new(uid, attrs, std::collections::HashSet::new())
+            .map_err(|e| CedarError::Request(e.to_string()))?;
+        Entities::from_entities([entity], self.schema.as_ref())
+            .map_err(|e| CedarError::Request(e.to_string()))
+    }
+
     fn context(&self, tool_key: &str, scope: Option<&str>) -> Result<Context, CedarError> {
         let pairs = [
             (
@@ -117,6 +136,20 @@ impl CedarEngine {
         ];
         Context::from_pairs(pairs).map_err(|e| CedarError::Request(e.to_string()))
     }
+}
+
+/// Rewrite `like "~/..."` patterns to the absolute home path. permissions.toml
+/// (and so `export-cedar`) writes `~/.ssh/**`, but file tools send absolute
+/// paths and Cedar's `like` has no notion of `~`, so such a forbid never fired.
+fn expand_home_in_like(src: &str) -> String {
+    let Some(home) = std::env::var_os("HOME").and_then(|h| h.into_string().ok()) else {
+        return src.to_string();
+    };
+    let home = home
+        .trim_end_matches('/')
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    src.replace("like \"~/", &format!("like \"{home}/"))
 }
 
 /// A Cedar entity-id literal is a quoted string; escape `"` and `\`.
@@ -209,5 +242,36 @@ mod tests {
         let e = engine(ALLOW_MCP_TOOL);
         assert_eq!(e.decide("deepwiki.search", None), CedarDecision::Allow);
         assert_eq!(e.decide("deepwiki.other", None), CedarDecision::NoDecision);
+    }
+}
+
+#[cfg(test)]
+mod repro_store_compat {
+    use super::{CedarDecision, CedarEngine};
+
+    // export-cedar emits this for a whole-server MCP rule ([mcp.github] deny).
+    const FORBID_SERVER: &str =
+        r#"forbid(principal, action, resource is Tool) when { resource.name like "github.*" };"#;
+    // export-cedar keeps ~ from permissions.toml; file-tool scopes are absolute.
+    const FORBID_SSH: &str = r#"forbid(principal, action, resource == Tool::"edit") when { context.scope like "~/.ssh/*" };"#;
+
+    #[test]
+    fn server_wildcard_forbid_denies_its_tools() {
+        let e = CedarEngine::from_source(FORBID_SERVER, None).unwrap();
+        assert!(matches!(
+            e.decide("github.create_issue", Some("*")),
+            CedarDecision::Deny(_)
+        ));
+        assert_eq!(e.decide("gitlab.x", Some("*")), CedarDecision::NoDecision);
+    }
+
+    #[test]
+    fn tilde_scope_matches_absolute_home_path() {
+        let e = CedarEngine::from_source(FORBID_SSH, None).unwrap();
+        let home = std::env::var("HOME").unwrap();
+        assert!(matches!(
+            e.decide("edit", Some(&format!("{home}/.ssh/config"))),
+            CedarDecision::Deny(_)
+        ));
     }
 }
