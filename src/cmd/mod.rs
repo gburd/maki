@@ -1,5 +1,6 @@
 mod acp;
 mod migrate;
+mod permissions;
 mod session;
 mod subcmd;
 mod tui;
@@ -278,6 +279,7 @@ pub async fn dispatch(cli: Cli) -> Result<()> {
                 migrate::providers()?
             }
         },
+        Some(Command::Permissions { action }) => permissions::run(action)?,
         Some(Command::Trust { action }) => {
             let storage = StateDir::resolve().context("resolve state directory")?;
             match action {
