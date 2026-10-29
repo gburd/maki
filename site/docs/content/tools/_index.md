@@ -48,9 +48,9 @@ Write content to a file, replacing existing content.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `append` | boolean | no | Add content to the end of the file instead of replacing it |
 | `content` | string | yes | The complete file content to write |
 | `path` | string | yes | Absolute path to the file |
+| `append` | boolean | no | Add content to the end of the file instead of replacing it |
 
 ### `edit` {#edit}
 
@@ -100,8 +100,8 @@ Find files by glob pattern.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `path` | string | no | cwd | Directory to search in |
 | `pattern` | string | yes |  | Glob pattern (e.g. **/*.rs, src/**/*.ts) |
+| `path` | string | no | cwd | Directory to search in |
 
 ### `grep` {#grep}
 
@@ -109,12 +109,12 @@ Search file contents using regex.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `pattern` | string | yes |  | Regex pattern |
 | `context_after` | integer | no |  | Context lines after match |
 | `context_before` | integer | no |  | Context lines before match |
 | `include` | string | no |  | File glob filter (e.g. *.c) |
 | `limit` | integer | no |  | Max match groups to return |
 | `path` | string | no | cwd | Directory to search in |
-| `pattern` | string | yes |  | Regex pattern |
 
 ### `index` {#index}
 
@@ -173,9 +173,9 @@ Launch an autonomous subagent to perform tasks independently. Best combined with
 |-----------|------|----------|-------------|
 | `background` | boolean | no | Run in the background and continue other work: the call returns immediately and the result arrives later as a message. Launch every background task in one parallel batch, never as sequential calls, and don't sleep or poll for it; end your turn once nothing else is left. |
 | `description` | string | yes | Short (3-5 words) description of the task |
+| `prompt` | string | yes | Detailed task prompt for the agent |
 | `model_tier` | string | no | Model tier (optional, omit to use current model, capped at current tier):<br>- "strong" (e.g. Opus): Deep reasoning, complex architecture, subtle bugs, most critical sections. ~5x cost of medium.<br>- "medium" (e.g. Sonnet): Balanced. Refactors, features, multi-file changes.<br>- "weak" (e.g. Haiku): Fast/cheap. Search, summarize, boilerplate, simple edits. |
 | `output_schema` | object | no | JSON Schema (object) the subagent's final result must match. When set, the result is returned as a validated JSON string. |
-| `prompt` | string | yes | Detailed task prompt for the agent |
 | `subagent_type` | string | no | Subagent type: "research" (read-only, default) or "general" (can modify files) |
 | `thinking` | any | no | Thinking: off\|adaptive\|minimal\|low\|medium\|high\|xhigh\|max\|int budget. Omit to inherit parent; capped at parent. |
 
@@ -231,9 +231,9 @@ Fetch a URL and return its contents.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `url` | string | yes |  | URL to fetch (http:// or https://) |
 | `format` | string | no |  | Output format: markdown (default), text, or html |
 | `timeout` | integer | no | 30, max 120 | Timeout in seconds |
-| `url` | string | yes |  | URL to fetch (http:// or https://) |
 
 ### `websearch` {#websearch}
 
@@ -241,5 +241,5 @@ Search the web for real-time information using Exa AI.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `num_results` | integer | no | 8 | Number of results to return |
 | `query` | string | yes |  | Search query |
+| `num_results` | integer | no | 8 | Number of results to return |
