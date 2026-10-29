@@ -3554,10 +3554,12 @@ dependencies = [
 name = "maki-cedar"
 version = "0.6.5"
 dependencies = [
+ "async-compat",
  "cedar-policy",
  "reqwest",
  "serde",
  "serde_json",
+ "smol",
  "test-case",
  "thiserror 2.0.21",
 ]

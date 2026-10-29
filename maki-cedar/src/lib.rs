@@ -14,7 +14,7 @@ mod agent_client;
 mod compile;
 mod engine;
 
-pub use agent_client::{AgentClient, AgentPolicy, DEFAULT_AGENT_PORT};
+pub use agent_client::{AgentClient, AgentPolicy, AgentVerdict, DEFAULT_AGENT_PORT};
 pub use compile::{DefaultModel, PermissionsModel, RuleModel, compile, schema};
 pub use engine::{CedarDecision, CedarEngine};
 
