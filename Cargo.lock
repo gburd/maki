@@ -3553,6 +3553,9 @@ name = "maki-cedar"
 version = "0.6.5"
 dependencies = [
  "cedar-policy",
+ "reqwest",
+ "serde",
+ "serde_json",
  "test-case",
  "thiserror 2.0.21",
 ]
@@ -5841,6 +5844,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

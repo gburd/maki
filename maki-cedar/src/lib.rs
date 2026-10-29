@@ -10,9 +10,11 @@
 //! policy matches the engine returns [`CedarDecision::NoDecision`] so maki
 //! falls back to its own default (which usually means: prompt the user).
 
+mod agent_client;
 mod compile;
 mod engine;
 
+pub use agent_client::{AgentClient, AgentPolicy, DEFAULT_AGENT_PORT};
 pub use compile::{DefaultModel, PermissionsModel, RuleModel, compile, schema};
 pub use engine::{CedarDecision, CedarEngine};
 
