@@ -97,7 +97,7 @@ impl CedarEngine {
             // diagnostics; "nothing matched" names nothing, which maki turns
             // back into a prompt via NoDecision.
             Decision::Deny if response.diagnostics().reason().next().is_some() => {
-                CedarDecision::Deny(deny_reason(&response))
+                CedarDecision::Deny(deny_reason(&self.policies, &response))
             }
             Decision::Deny => CedarDecision::NoDecision,
         }
@@ -158,11 +158,18 @@ fn quote(s: &str) -> String {
     format!("\"{escaped}\"")
 }
 
-fn deny_reason(response: &Response) -> String {
+fn deny_reason(policies: &PolicySet, response: &Response) -> String {
+    // Name the policy by its `@id` annotation when it has one; the PolicyId
+    // from a parsed source text is just `policy<N>`.
     let ids: Vec<String> = response
         .diagnostics()
         .reason()
-        .map(|p| p.to_string())
+        .map(|id| {
+            policies
+                .policy(id)
+                .and_then(|p| p.annotation("id"))
+                .map_or_else(|| id.to_string(), str::to_string)
+        })
         .collect();
     if ids.is_empty() {
         "denied by Cedar policy".to_string()
@@ -263,6 +270,16 @@ mod repro_store_compat {
             CedarDecision::Deny(_)
         ));
         assert_eq!(e.decide("gitlab.x", Some("*")), CedarDecision::NoDecision);
+    }
+
+    #[test]
+    fn deny_names_the_id_annotation() {
+        let src = "@id(\"no-sudo\")\nforbid(principal, action, resource == Tool::\"bash\") when { context.scope like \"sudo *\" };";
+        let e = CedarEngine::from_source(src, None).unwrap();
+        assert_eq!(
+            e.decide("bash", Some("sudo ls")),
+            CedarDecision::Deny("denied by Cedar policy no-sudo".into())
+        );
     }
 
     #[test]

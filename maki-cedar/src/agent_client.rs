@@ -111,9 +111,17 @@ impl AgentClient {
             .json()
             .await
             .map_err(|e| CedarError::Policies(e.to_string()))?;
+        // Keep the store's id as an @id annotation so a deny names the policy
+        // the user wrote (deny_reason reads it), not Cedar's `policy<N>`.
         Ok(policies
             .into_iter()
-            .map(|p| p.content)
+            .map(|p| {
+                if p.content.trim_start().starts_with("@id(") {
+                    p.content
+                } else {
+                    format!("@id({})\n{}", quote(&p.id), p.content)
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n"))
     }
