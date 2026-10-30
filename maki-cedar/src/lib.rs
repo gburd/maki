@@ -30,6 +30,21 @@ pub const TOOL_TYPE: &str = "Tool";
 pub const CTX_SCOPE: &str = "scope";
 /// Context key holding the tool key string (e.g. `bash`, `server.tool`).
 pub const CTX_TOOL: &str = "tool";
+/// Context key holding the project: the agent's working directory relative
+/// to `$HOME` (`ws/postgres/undo`), or the absolute path outside `$HOME`.
+/// Lets one policy set carry per-project rules (`context.project like "ws/x*"`).
+pub const CTX_PROJECT: &str = "project";
+
+/// The project string for `cwd`: relative to `$HOME` when under it, else the
+/// absolute path. Shared by maki and the store so both spell it alike.
+pub fn project_of(cwd: &std::path::Path) -> String {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    match home.as_deref().and_then(|h| cwd.strip_prefix(h).ok()) {
+        Some(rel) if rel.as_os_str().is_empty() => "~".to_string(),
+        Some(rel) => rel.display().to_string(),
+        None => cwd.display().to_string(),
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum CedarError {

@@ -27,6 +27,7 @@ pub struct LocalBackend {
 
 struct Resync {
     settings: CedarSettings,
+    project: String,
     every: Duration,
     last: Mutex<Instant>,
 }
@@ -52,13 +53,15 @@ impl CedarBackend {
     /// Build the backend selected by `settings`, or `None` when the builtin
     /// engine is in force. A misconfiguration logs and returns `None` so maki
     /// falls back to its own rules rather than failing closed on every tool.
-    pub fn build(settings: &CedarSettings) -> Option<Self> {
+    /// `project` (see [`maki_cedar::project_of`]) is sent as `context.project`
+    /// with every decision, so policies can differ per project.
+    pub fn build(settings: &CedarSettings, project: &str) -> Option<Self> {
         if settings.engine != PolicyEngineKind::Cedar {
             return None;
         }
         if settings.agent_per_call {
             let url = settings.agent_url.as_deref()?;
-            return match client(settings, url) {
+            return match client(settings, url).map(|c| c.with_project(project)) {
                 Ok(c) => {
                     info!(url, "cedar: per-call authorization via cedar-agent");
                     Some(Self::PerCall(Arc::new(c)))
@@ -70,10 +73,11 @@ impl CedarBackend {
             };
         }
 
-        let engine = compile(settings)?;
-        info!("cedar: local policy evaluation active");
+        let engine = compile(settings, project)?;
+        info!(project, "cedar: local policy evaluation active");
         let resync = settings.agent_url.as_ref().map(|_| Resync {
             settings: settings.clone(),
+            project: project.to_string(),
             every: Duration::from_secs(if settings.sync_interval_secs == 0 {
                 DEFAULT_SYNC_SECS
             } else {
@@ -128,7 +132,7 @@ impl LocalBackend {
             }
             *last = Instant::now();
         }
-        match compile(&r.settings) {
+        match compile(&r.settings, &r.project) {
             Some(engine) => {
                 if let Ok(mut slot) = self.engine.write() {
                     *slot = Arc::new(engine);
@@ -154,11 +158,11 @@ fn client(settings: &CedarSettings, url: &str) -> Result<AgentClient, maki_cedar
     Ok(AgentClient::new(url, AGENT_TIMEOUT)?.with_token(token))
 }
 
-fn compile(settings: &CedarSettings) -> Option<CedarEngine> {
+fn compile(settings: &CedarSettings, project: &str) -> Option<CedarEngine> {
     let policies = load_policies(settings)?;
     let schema = load_schema(settings);
     match CedarEngine::from_source(&policies, schema.as_deref()) {
-        Ok(e) => Some(e),
+        Ok(e) => Some(e.with_project(project)),
         Err(e) => {
             warn!(error = %e, "cedar: policy compile failed, using builtin rules");
             None

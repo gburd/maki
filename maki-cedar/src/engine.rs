@@ -5,7 +5,7 @@ use cedar_policy::{
     RestrictedExpression, Schema,
 };
 
-use crate::{ACTION, CTX_SCOPE, CTX_TOOL, CedarError, PRINCIPAL, TOOL_TYPE};
+use crate::{ACTION, CTX_PROJECT, CTX_SCOPE, CTX_TOOL, CedarError, PRINCIPAL, TOOL_TYPE};
 
 /// A compiled Cedar policy set ready to answer `(tool, scope)` questions.
 ///
@@ -18,6 +18,8 @@ pub struct CedarEngine {
     principal: EntityUid,
     action: EntityUid,
     schema: Option<Schema>,
+    /// `context.project` for every request (see [`crate::project_of`]).
+    project: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,7 +52,15 @@ impl CedarEngine {
             principal,
             action,
             schema,
+            project: String::new(),
         })
+    }
+
+    /// Set the project every request carries in `context.project`.
+    #[must_use]
+    pub fn with_project(mut self, project: impl Into<String>) -> Self {
+        self.project = project.into();
+        self
     }
 
     /// Authorize one `(tool, scope)` pair.
@@ -132,6 +142,10 @@ impl CedarEngine {
             (
                 CTX_SCOPE.to_string(),
                 RestrictedExpression::new_string(scope.unwrap_or("").to_string()),
+            ),
+            (
+                CTX_PROJECT.to_string(),
+                RestrictedExpression::new_string(self.project.clone()),
             ),
         ];
         Context::from_pairs(pairs).map_err(|e| CedarError::Request(e.to_string()))
@@ -270,6 +284,49 @@ mod repro_store_compat {
             CedarDecision::Deny(_)
         ));
         assert_eq!(e.decide("gitlab.x", Some("*")), CedarDecision::NoDecision);
+    }
+
+    #[test]
+    fn project_scoped_override_applies_only_in_its_project() {
+        // A project opt-in that punches through a global forbid needs an
+        // `unless` on the forbid (deny always wins in Cedar); this is the
+        // shape nix-config generates for per-project overrides.
+        let src = r#"
+            @id("no-reset")
+            forbid(principal, action, resource == Tool::"bash")
+                when { context.scope like "git reset *" }
+                unless { context.project like "ws/postgres/undo*" && context.scope like "git reset --keep*" };
+        "#;
+        let schema = crate::compile::schema();
+        let undo = CedarEngine::from_source(src, Some(schema))
+            .unwrap()
+            .with_project("ws/postgres/undo");
+        let other = CedarEngine::from_source(src, Some(schema))
+            .unwrap()
+            .with_project("ws/libdb");
+        let keep = "git reset --keep HEAD~1";
+        assert_eq!(undo.decide("bash", Some(keep)), CedarDecision::NoDecision);
+        assert!(matches!(
+            other.decide("bash", Some(keep)),
+            CedarDecision::Deny(_)
+        ));
+        // the narrower carve-out does not open the rest of the forbid
+        assert!(matches!(
+            undo.decide("bash", Some("git reset --hard")),
+            CedarDecision::Deny(_)
+        ));
+    }
+
+    #[test]
+    fn project_of_is_home_relative() {
+        let home = std::env::var("HOME").unwrap();
+        let p = std::path::Path::new(&home).join("ws/postgres/undo");
+        assert_eq!(crate::project_of(&p), "ws/postgres/undo");
+        assert_eq!(crate::project_of(std::path::Path::new(&home)), "~");
+        assert_eq!(
+            crate::project_of(std::path::Path::new("/scratch/x")),
+            "/scratch/x"
+        );
     }
 
     #[test]

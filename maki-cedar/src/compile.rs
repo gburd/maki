@@ -111,8 +111,10 @@ const SCHEMA: &str = r#"// Cedar schema for maki's permission model.
 // maki has one principal, the agent itself, and one action, invoking a tool.
 // The resource is the tool being invoked, named by its tool key (bash,
 // server.tool). The requested scope (a path, a bash command, any free-form
-// string) and the tool key travel in the action context, so policies read
-// context.scope and context.tool and one schema covers every tool.
+// string), the tool key and the project (the agent's working directory,
+// relative to $HOME) travel in the action context, so policies read
+// context.scope, context.tool and context.project and one schema covers
+// every tool and every project.
 
 entity Agent;
 
@@ -125,6 +127,7 @@ action invoke
         principal: [Agent],
         resource: [Tool],
         context: {
+            "project": String,
             "scope": String,
             "tool": String,
         },
