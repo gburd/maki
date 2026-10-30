@@ -62,6 +62,7 @@ pub struct AgentClient {
     base_url: String,
     http: reqwest::Client,
     token: Option<String>,
+    project: String,
 }
 
 impl AgentClient {
@@ -74,6 +75,7 @@ impl AgentClient {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             http,
             token: None,
+            project: String::new(),
         })
     }
 
@@ -168,6 +170,13 @@ impl AgentClient {
         Compat::new(self.is_authorized_inner(tool_key, scope)).await
     }
 
+    /// Set the project sent as `context.project` (see [`crate::project_of`]).
+    #[must_use]
+    pub fn with_project(mut self, project: impl Into<String>) -> Self {
+        self.project = project.into();
+        self
+    }
+
     async fn is_authorized_inner(
         &self,
         tool_key: &str,
@@ -180,6 +189,7 @@ impl AgentClient {
             context: serde_json::json!({
                 crate::CTX_TOOL: tool_key,
                 crate::CTX_SCOPE: scope.unwrap_or(""),
+                crate::CTX_PROJECT: self.project,
             }),
         };
         let url = format!("{}/v1/is_authorized", self.base_url);

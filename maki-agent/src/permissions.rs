@@ -389,7 +389,7 @@ impl PermissionManager {
     ) -> Self {
         let config_rules = config.rules;
         let builtin_rules = builtin_rules(&cwd);
-        let cedar = CedarBackend::build(&config.cedar).map(Arc::new);
+        let cedar = CedarBackend::build(&config.cedar, &maki_cedar::project_of(&cwd)).map(Arc::new);
 
         // Warn if wildcard deny is present — it blocks ALL tools including builtins.
         let has_wildcard_deny = config_rules
