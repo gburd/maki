@@ -1,12 +1,28 @@
+use std::io;
+use std::sync::LazyLock;
+use std::sync::mpsc;
 use std::time::Duration;
 
-use async_compat::Compat;
 use serde::{Deserialize, Serialize};
+use tokio::runtime::{Builder, Runtime};
 
 use crate::{ACTION, CedarError, PRINCIPAL, TOOL_TYPE};
 
 /// Default cedar-agent listen port (see permitio/cedar-agent).
 pub const DEFAULT_AGENT_PORT: u16 = 8180;
+
+const RUNTIME_THREAD_NAME: &str = "maki-cedar";
+
+/// The permission check is sync and runs from tokio workers, the blocking
+/// pool and the Lua `LocalSet` alike, where `block_in_place` panics. A private
+/// runtime serves every request, so the caller only ever waits on a channel.
+static RUNTIME: LazyLock<io::Result<Runtime>> = LazyLock::new(|| {
+    Builder::new_multi_thread()
+        .worker_threads(1)
+        .thread_name(RUNTIME_THREAD_NAME)
+        .enable_all()
+        .build()
+});
 
 /// One policy as cedar-agent stores and returns it on `GET /v1/policies`.
 #[derive(Debug, Clone, Deserialize)]
@@ -58,6 +74,7 @@ pub enum AgentVerdict {
 /// stalls a tool call. [`is_authorized`](Self::is_authorized) is the fallback
 /// that asks the agent to decide per call, for deployments that want the agent
 /// to own evaluation and have entity data maki does not.
+#[derive(Clone)]
 pub struct AgentClient {
     base_url: String,
     http: reqwest::Client,
@@ -95,11 +112,9 @@ impl AgentClient {
 
     /// Fetch all policies and concatenate their `content` into one Cedar
     /// source string ready for [`crate::CedarEngine::from_source`].
-    /// reqwest runs on tokio and maki drives this with `smol::block_on`, so
-    /// the request is awaited through [`Compat`] (as maki-storage does);
-    /// without it every sync panicked with "no reactor running".
-    pub async fn fetch_policies(&self) -> Result<String, CedarError> {
-        Compat::new(self.fetch_policies_inner()).await
+    pub fn fetch_policies(&self) -> Result<String, CedarError> {
+        let this = self.clone();
+        block_on(async move { this.fetch_policies_inner().await })?
     }
 
     async fn fetch_policies_inner(&self) -> Result<String, CedarError> {
@@ -131,8 +146,9 @@ impl AgentClient {
     /// Fetch the schema, if the agent has one. cedar-agent serves JSON schema;
     /// the caller passes it to a [`crate::CedarEngine`] built from JSON, or
     /// omits it. Returns `None` when the agent has no schema set.
-    pub async fn fetch_schema_json(&self) -> Result<Option<serde_json::Value>, CedarError> {
-        Compat::new(self.fetch_schema_json_inner()).await
+    pub fn fetch_schema_json(&self) -> Result<Option<serde_json::Value>, CedarError> {
+        let this = self.clone();
+        block_on(async move { this.fetch_schema_json_inner().await })?
     }
 
     async fn fetch_schema_json_inner(&self) -> Result<Option<serde_json::Value>, CedarError> {
@@ -162,12 +178,15 @@ impl AgentClient {
     /// Fallback: ask cedar-agent to decide one `(tool, scope)` directly.
     /// Returns Allow, an explicit Deny, or NoMatch (no policy applied). Only used when the
     /// local-sync path is disabled.
-    pub async fn is_authorized(
+    pub fn is_authorized(
         &self,
         tool_key: &str,
         scope: Option<&str>,
     ) -> Result<AgentVerdict, CedarError> {
-        Compat::new(self.is_authorized_inner(tool_key, scope)).await
+        let this = self.clone();
+        let tool_key = tool_key.to_owned();
+        let scope = scope.map(str::to_owned);
+        block_on(async move { this.is_authorized_inner(&tool_key, scope.as_deref()).await })?
     }
 
     /// Set the project sent as `context.project` (see [`crate::project_of`]).
@@ -216,6 +235,20 @@ impl AgentClient {
             AgentVerdict::NoMatch
         })
     }
+}
+
+fn block_on<T: Send + 'static>(
+    future: impl Future<Output = T> + Send + 'static,
+) -> Result<T, CedarError> {
+    let runtime = RUNTIME
+        .as_ref()
+        .map_err(|e| CedarError::Request(format!("cedar runtime failed to start: {e}")))?;
+    let (tx, rx) = mpsc::sync_channel(1);
+    runtime.spawn(async move {
+        let _ = tx.send(future.await);
+    });
+    rx.recv()
+        .map_err(|_| CedarError::Request("cedar request task stopped".to_string()))
 }
 
 fn quote(s: &str) -> String {
@@ -294,14 +327,14 @@ mod store_compat {
     #[test]
     fn sends_bearer_token_when_configured() {
         let (url, rx) = stub("[]");
-        smol::block_on(client(&url, Some("s3cret")).fetch_policies()).unwrap();
+        client(&url, Some("s3cret")).fetch_policies().unwrap();
         assert_eq!(rx.recv().unwrap().as_deref(), Some("Bearer s3cret"));
     }
 
     #[test]
     fn sends_no_authorization_without_token() {
         let (url, rx) = stub("[]");
-        smol::block_on(client(&url, None).fetch_policies()).unwrap();
+        client(&url, None).fetch_policies().unwrap();
         assert_eq!(rx.recv().unwrap(), None);
     }
 
@@ -309,7 +342,7 @@ mod store_compat {
     fn deny_without_reason_is_no_match() {
         // cedar-agent shape: no `matched`, empty reasons.
         let (url, _rx) = stub(r#"{"decision":"Deny","diagnostics":{"reason":[],"errors":[]}}"#);
-        let v = smol::block_on(client(&url, None).is_authorized("bash", Some("ls"))).unwrap();
+        let v = client(&url, None).is_authorized("bash", Some("ls")).unwrap();
         assert_eq!(v, AgentVerdict::NoMatch);
     }
 
@@ -317,7 +350,7 @@ mod store_compat {
     fn deny_with_reason_is_deny() {
         let (url, _rx) =
             stub(r#"{"decision":"Deny","diagnostics":{"reason":["deny-sudo"],"errors":[]}}"#);
-        let v = smol::block_on(client(&url, None).is_authorized("bash", Some("sudo ls"))).unwrap();
+        let v = client(&url, None).is_authorized("bash", Some("sudo ls")).unwrap();
         assert_eq!(v, AgentVerdict::Deny);
     }
 
@@ -325,7 +358,7 @@ mod store_compat {
     fn cedar_store_matched_flag_wins() {
         let (url, _rx) =
             stub(r#"{"decision":"Deny","matched":false,"diagnostics":{"reason":[],"errors":[]}}"#);
-        let v = smol::block_on(client(&url, None).is_authorized("bash", Some("ls"))).unwrap();
+        let v = client(&url, None).is_authorized("bash", Some("ls")).unwrap();
         assert_eq!(v, AgentVerdict::NoMatch);
     }
 }

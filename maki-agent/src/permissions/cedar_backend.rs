@@ -104,7 +104,7 @@ impl CedarBackend {
                     None => CedarDecision::NoDecision,
                 }
             }
-            Self::PerCall(client) => match smol::block_on(client.is_authorized(tool_key, scope)) {
+            Self::PerCall(client) => match client.is_authorized(tool_key, scope) {
                 Ok(AgentVerdict::Allow) => CedarDecision::Allow,
                 Ok(AgentVerdict::Deny) => CedarDecision::Deny("denied by cedar-agent".to_string()),
                 Ok(AgentVerdict::NoMatch) => CedarDecision::NoDecision,
@@ -185,7 +185,7 @@ fn load_policies(settings: &CedarSettings) -> Option<String> {
 
     if let Some(url) = &settings.agent_url {
         match client(settings, url) {
-            Ok(client) => match smol::block_on(client.fetch_policies()) {
+            Ok(client) => match client.fetch_policies() {
                 Ok(s) => {
                     info!(url, "cedar: synced policies from agent");
                     parts.push(s);
